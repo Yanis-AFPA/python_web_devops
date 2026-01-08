@@ -204,28 +204,67 @@ async function initDashboard() {
 }
 
 // --- Global Users Cache for Assignee Dropdown ---
+// --- Global Users/Teams Cache ---
 let usersCache = [];
+let teamsCache = [];
 
 async function loadUsersForDropdown() {
     try {
-        const res = await fetch('/api/users');
-        usersCache = await res.json();
+        const [uRes, tRes] = await Promise.all([
+            fetch('/api/users'),
+            fetch('/api/teams')
+        ]);
+        usersCache = await uRes.json();
+        teamsCache = await tRes.json();
 
         const sel = document.getElementById('pageAssignee');
         sel.innerHTML = '<option value="">-- Unassigned --</option>';
 
         const currentRole = window.currentUserRole;
         const currentId = window.currentUserId;
-        const currentTeamId = window.currentTeamId; // Need to pass this from backend
+        const currentTeamId = window.currentTeamId;
 
+        // --- 1. SPECIAL OPTIONS ---
+        // Global (Admin only)
+        if (currentRole === 'admin') {
+            const opt = document.createElement('option');
+            opt.value = "global";
+            opt.innerText = "🌍 ALL USERS (Global)";
+            opt.style.fontWeight = "bold";
+            sel.appendChild(opt);
+        }
+
+        // Teams (Admin or Manager)
+        if (currentRole === 'admin' || currentRole === 'manager') {
+            teamsCache.forEach(t => {
+                let showTeam = true;
+                if (currentRole === 'manager' && t.id !== currentTeamId) showTeam = false;
+
+                if (showTeam) {
+                    const opt = document.createElement('option');
+                    opt.value = `team:${t.id}`;
+                    opt.innerText = `👥 TEAM: ${t.name}`;
+                    opt.style.fontWeight = "bold";
+                    sel.appendChild(opt);
+                }
+            });
+        }
+
+        // Spacer
+        if (sel.options.length > 1) {
+            const spacer = document.createElement('option');
+            spacer.disabled = true;
+            spacer.innerText = "────── Users ──────";
+            sel.appendChild(spacer);
+        }
+
+        // --- 2. USERS ---
         usersCache.forEach(u => {
             // FILTER LOGIC
             let shouldShow = true;
 
             if (currentRole === 'manager') {
-                // Manager: Show Self + Team Members + Unassigned (maybe?)
-                // Strict: Team Members only.
-                // If u.team_id == currentTeamId
+                // Manager: Show Team Members
                 if (currentTeamId) {
                     shouldShow = (u.team_id === currentTeamId);
                 }
@@ -241,7 +280,7 @@ async function loadUsersForDropdown() {
                 sel.appendChild(opt);
             }
         });
-    } catch (e) { console.error("Failed to load users for assignment", e); }
+    } catch (e) { console.error("Failed to load users/teams", e); }
 }
 
 // --- Calendar Functions ---
@@ -276,6 +315,8 @@ function initCalendar() {
                     status: eventData.status,
                     author_id: eventData.author_id,
                     assignee_id: eventData.assignee_id,
+                    assigned_team_id: eventData.assigned_team_id,
+                    is_global: eventData.is_global,
                     priority: eventData.priority || 'medium'
                 },
                 backgroundColor: getColorForStatus(eventData.status || 'todo'),
@@ -436,7 +477,17 @@ function openEditor(data, isExisting = false) {
         // Pivot Fields
         document.getElementById('pageCategory').value = data.extendedProps.category || 'feature';
         document.getElementById('pagePriority').value = data.extendedProps.priority || 'medium';
-        document.getElementById('pageAssignee').value = data.extendedProps.assignee_id || "";
+
+        // Pivot Assignee
+        const assigneeSelect = document.getElementById('pageAssignee');
+        if (data.extendedProps.is_global) {
+            assigneeSelect.value = 'global';
+        } else if (data.extendedProps.assigned_team_id) {
+            assigneeSelect.value = `team:${data.extendedProps.assigned_team_id}`;
+        } else {
+            assigneeSelect.value = data.extendedProps.assignee_id || "";
+        }
+
         document.getElementById('pageStatus').value = data.extendedProps.status || 'todo';
 
         quill.root.innerHTML = data.extendedProps.content || "";
@@ -510,7 +561,7 @@ function openEditor(data, isExisting = false) {
             assigneeSelect.value = window.currentUserId;
             assigneeSelect.disabled = true;
         } else {
-            // Manager/Admin -> Can assign to anyone (filtered by team if manager, handled by init)
+            // Manager/Admin -> Can assign to anyone
             assigneeSelect.value = "";
             assigneeSelect.disabled = false;
         }
@@ -535,7 +586,6 @@ window.handleFileUpload = async function (input) {
             input.value = '';
             return;
         }
-        // currentEventId is updated in savePage() but let's be safe
     }
 
     const file = input.files[0];
@@ -568,6 +618,7 @@ window.handleFileUpload = async function (input) {
     }
     input.value = '';
 };
+
 // ... (keep deleteFileAttachment) ...
 
 // ... (in savePage) ...
@@ -577,7 +628,20 @@ async function savePage() {
     const category = document.getElementById('pageCategory').value;
     const priority = document.getElementById('pagePriority').value;
     const status = document.getElementById('pageStatus').value;
-    const assignee_id = document.getElementById('pageAssignee').value ? parseInt(document.getElementById('pageAssignee').value) : null;
+    const assigneeVal = document.getElementById('pageAssignee').value;
+
+    let assignee_id = null;
+    let assigned_team_id = null;
+    let is_global = false;
+
+    // Parse Assignee Value
+    if (assigneeVal === 'global') {
+        is_global = true;
+    } else if (assigneeVal.startsWith('team:')) {
+        assigned_team_id = parseInt(assigneeVal.split(':')[1]);
+    } else if (assigneeVal) {
+        assignee_id = parseInt(assigneeVal);
+    }
 
     if (!title) {
         alert("Title Required");
@@ -585,7 +649,8 @@ async function savePage() {
     }
 
     const payload = {
-        title, content, category, priority, assignee_id, status
+        title, content, category, priority, status,
+        assignee_id, assigned_team_id, is_global
     };
 
     let method = 'POST';

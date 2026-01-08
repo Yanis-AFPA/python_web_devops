@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import JSONResponse
-from sqlmodel import select, col, func
+from sqlmodel import select, col, func, or_
 from sqlalchemy.orm import selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -38,23 +38,48 @@ async def get_pages(
         query = query.where(Page.start_time <= end)
     
     # --- VISIBILITY SCOPE ---
+    # Global tasks always visible
+    # Team tasks visible to team members
+    
     if current_user.role == UserRole.ADMIN:
         pass # See all
     elif current_user.role == UserRole.MANAGER:
-        # See own tasks + tasks assigned to team members
+        # See:
+        # 1. Global tasks
+        # 2. Own tasks (Author or Assignee)
+        # 3. Tasks assigned to MY TEAM (assigned_team_id == current_user.team_id)
+        # 4. Tasks assigned to users IN MY TEAM
+        
+        conditions = [
+            Page.is_global == True,
+            Page.author_id == current_user.id,
+            Page.assignee_id == current_user.id
+        ]
+        
         if current_user.team_id:
-            # Subquery to get user IDs in the same team
+            conditions.append(Page.assigned_team_id == current_user.team_id)
+            # Users in my team
             sub = select(User.id).where(User.team_id == current_user.team_id)
-            query = query.where(
-                (Page.assignee_id.in_(sub)) | 
-                (Page.assignee_id == None) | 
-                (Page.author_id == current_user.id)
-            )
-        else:
-            query = query.where(Page.assignee_id == current_user.id)
+            conditions.append(Page.assignee_id.in_(sub))
+            
+        query = query.where(or_(*conditions))
+
     else: # MEMBER
-        # See only assigned to self
-        query = query.where(Page.assignee_id == current_user.id)
+        # See:
+        # 1. Global tasks
+        # 2. Own tasks (Assignee or Author)
+        # 3. Tasks assigned to MY TEAM
+        
+        conditions = [
+            Page.is_global == True,
+            Page.assignee_id == current_user.id,
+            Page.author_id == current_user.id
+        ]
+        
+        if current_user.team_id:
+            conditions.append(Page.assigned_team_id == current_user.team_id)
+            
+        query = query.where(or_(*conditions))
     
     result = await session.exec(query)
     return result.all()
@@ -82,9 +107,18 @@ async def create_page(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_active_user)
 ):
-    # Member restriction: Can only assign to self
-    if current_user.role == UserRole.MEMBER and page_data.assignee_id and page_data.assignee_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Vous ne pouvez vous assigner que vos propres tâches")
+    # Validations
+    if page_data.is_global and current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Seuls les administrateurs peuvent créer des tâches globales")
+        
+    if page_data.assigned_team_id:
+        if current_user.role == UserRole.MEMBER and current_user.team_id != page_data.assigned_team_id:
+            raise HTTPException(status_code=403, detail="Vous ne pouvez assigner une tâche qu'à votre propre équipe")
+            
+    # Member restriction: Can only assign to self IF not assigning to team/global
+    if current_user.role == UserRole.MEMBER and not page_data.assigned_team_id and not page_data.is_global:
+        if page_data.assignee_id and page_data.assignee_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Vous ne pouvez vous assigner que vos propres tâches")
 
     # Convert PageCreate to Page
     db_page = Page.from_orm(page_data)

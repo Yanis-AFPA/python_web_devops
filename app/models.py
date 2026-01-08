@@ -32,6 +32,7 @@ class TeamBase(SQLModel):
 class Team(TeamBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     members: list["User"] = Relationship(back_populates="team")
+    assigned_pages: list["Page"] = Relationship(back_populates="assigned_team")
 
 class TeamRead(TeamBase):
     id: int
@@ -68,6 +69,8 @@ class PageBase(SQLModel):
     status: PageStatus = Field(default=PageStatus.TODO)
     priority: PagePriority = Field(default=PagePriority.MEDIUM)
     assignee_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    assigned_team_id: Optional[int] = Field(default=None, foreign_key="team.id")
+    is_global: bool = Field(default=False)
 
 class Page(PageBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -77,6 +80,11 @@ class Page(PageBase, table=True):
     author_id: Optional[int] = Field(default=None, foreign_key="user.id")
     author: Optional[User] = Relationship(back_populates="pages", sa_relationship_kwargs={"foreign_keys": "[Page.author_id]"})
     assignee: Optional[User] = Relationship(back_populates="assigned_pages", sa_relationship_kwargs={"foreign_keys": "[Page.assignee_id]"})
+    
+    assigned_team_id: Optional[int] = Field(default=None, foreign_key="team.id")
+    assigned_team: Optional["Team"] = Relationship(back_populates="assigned_pages")
+    is_global: bool = Field(default=False)
+    
     files: list["StorageFile"] = Relationship(back_populates="page")
 
 class PageCreate(PageBase):
