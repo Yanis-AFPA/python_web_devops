@@ -25,10 +25,11 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Placeholder for seeding (will be called in initialization or manual script)
 
-from app.routers import views, api, users, storage
+from app.routers import views, api, users, storage, teams
 app.include_router(views.router)
 app.include_router(api.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
+app.include_router(teams.router, prefix="/api")
 app.include_router(storage.router, prefix="/api")
 
 @app.get("/")

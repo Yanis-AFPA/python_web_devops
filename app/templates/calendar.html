@@ -145,7 +145,9 @@
 <script>
     // Pass user permissions to JS
     window.currentUserRole = "{{ user.role.value }}";
+    window.currentUserRole = "{{ user.role.value }}";
     window.currentUserId = Number("{{ user.id }}");
+    window.currentTeamId = Number("{{ user.team_id if user.team_id else 0 }}");
 </script>
 <script src="/static/js/app.js"></script>
 <script>

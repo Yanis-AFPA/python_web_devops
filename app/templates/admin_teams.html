@@ -1,0 +1,197 @@
+{% extends "layout.html" %}
+
+{% block title %}Admin::Teams{% endblock %}
+
+{% block content %}
+<div class="p-6 h-full flex flex-col">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-white font-mono">> ./admin_panel.sh</h1>
+    </div>
+
+    <!-- Teams Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-grow overflow-auto" id="teamsContainer">
+        <!-- Unassigned Users -->
+        <div class="terminal-card rounded overflow-hidden flex flex-col bg-[#0d1117] h-full max-h-[600px]">
+            <div class="terminal-header border-b border-border">
+                <span class="text-warning"><i class="fas fa-users-slash mr-2"></i>UNASSIGNED_USERS</span>
+            </div>
+            <div class="p-4 flex-grow overflow-y-auto bg-[#161b22]" id="unassignedList" ondrop="drop(event, 0)"
+                ondragover="allowDrop(event)">
+                <!-- Users injected here -->
+            </div>
+        </div>
+
+        <!-- Dynamic Teams -->
+        <!-- Will be populated by JS -->
+    </div>
+
+    <!-- New Team Form -->
+    <div class="mt-6 pt-6 border-t border-border">
+        <div class="flex space-x-4">
+            <input type="text" id="newTeamName" placeholder="New Team Name"
+                class="bg-[#161b22] border border-border text-white px-3 py-2 text-sm font-mono focus:border-primary focus:outline-none rounded w-64">
+            <button onclick="createTeam()"
+                class="px-4 py-2 bg-primary text-background font-bold text-sm rounded hover:bg-opacity-90">
+                <i class="fas fa-plus mr-2"></i>mkdir team
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let users = [];
+    let teams = [];
+
+    async function initAdmin() {
+        await Promise.all([fetchUsers(), fetchTeams()]);
+        render();
+    }
+
+    async function fetchUsers() {
+        const res = await fetch('/api/users');
+        users = await res.json();
+    }
+
+    async function fetchTeams() {
+        const res = await fetch('/api/teams');
+        teams = await res.json();
+    }
+
+    function render() {
+        const container = document.getElementById('teamsContainer');
+        // Keep first child (Unassigned)
+        const unassignedEl = container.children[0];
+
+        // Clear other children
+        while (container.children.length > 1) {
+            container.removeChild(container.lastChild);
+        }
+
+        // Render Teams
+        teams.forEach(team => {
+            const teamCol = document.createElement('div');
+            teamCol.className = "terminal-card rounded overflow-hidden flex flex-col bg-[#0d1117] h-full max-h-[600px]";
+            teamCol.innerHTML = `
+            <div class="terminal-header border-b border-border flex justify-between">
+                <span class="text-primary"><i class="fas fa-users mr-2"></i>${team.name.toUpperCase()}</span>
+                <span onclick="deleteTeam(${team.id})" class="cursor-pointer text-danger hover:text-white"><i class="fas fa-trash"></i></span>
+            </div>
+            <div class="p-4 flex-grow overflow-y-auto bg-[#161b22]" id="team-${team.id}" ondrop="drop(event, ${team.id})" ondragover="allowDrop(event)">
+            </div>
+        `;
+            container.appendChild(teamCol);
+        });
+
+        // Distribute Users
+        const unassignedList = document.getElementById('unassignedList');
+        unassignedList.innerHTML = '';
+
+        users.forEach(user => {
+            const card = createUserCard(user);
+            if (user.team_id) {
+                const teamList = document.getElementById(`team-${user.team_id}`);
+                if (teamList) teamList.appendChild(card);
+                else unassignedList.appendChild(card); // Functionally unassigned if team missing
+            } else {
+                unassignedList.appendChild(card);
+            }
+        });
+    }
+
+    function createUserCard(user) {
+        const div = document.createElement('div');
+        div.className = "p-3 bg-[#0d1117] border border-border rounded mb-2 cursor-move hover:border-primary transition-colors flex items-center justify-between group";
+        div.draggable = true;
+        div.ondragstart = (e) => drag(e, user.id);
+
+        let roleColor = 'text-muted';
+        if (user.role === 'admin') roleColor = 'text-danger';
+        if (user.role === 'manager') roleColor = 'text-warning';
+
+        div.innerHTML = `
+        <div class="flex items-center">
+            <div class="w-6 h-6 rounded bg-primary/10 text-primary text-xs flex items-center justify-center mr-3 font-mono border border-primary/20">
+                ${user.username[0].toUpperCase()}
+            </div>
+            <div>
+                <div class="text-sm font-mono text-white">${user.username}</div>
+                <div class="text-[10px] font-mono ${roleColor} uppercase">${user.role}</div>
+            </div>
+        </div>
+        <i class="fas fa-grip-vertical text-muted opacity-0 group-hover:opacity-100"></i>
+    `;
+        return div;
+    }
+
+    // Drag & Drop
+    function allowDrop(ev) {
+        ev.preventDefault();
+    }
+
+    function drag(ev, userId) {
+        ev.dataTransfer.setData("text", userId);
+    }
+
+    async function drop(ev, teamId) {
+        ev.preventDefault();
+        const userId = ev.dataTransfer.getData("text");
+
+        // Optimistic UI
+        // In reality, we call API first
+        await assignUserToTeam(userId, teamId);
+    }
+
+    async function assignUserToTeam(userId, teamId) {
+        const payload = {
+            team_id: teamId == 0 ? 0 : teamId // 0 to clear? or -1? Logic in backend checks > 0.
+            // If 0 passed, logic says: user.team_id = 0 if > 0 else None.
+            // Since 0 is not > 0, it becomes None. Correct.
+        };
+
+        try {
+            const res = await fetch(`/api/users/${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                // Reload all
+                initAdmin();
+            } else {
+                alert("Failed to assign");
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    async function createTeam() {
+        const name = document.getElementById('newTeamName').value;
+        if (!name) return;
+
+        try {
+            const res = await fetch('/api/teams', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            if (res.ok) {
+                document.getElementById('newTeamName').value = '';
+                initAdmin();
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    async function deleteTeam(id) {
+        if (!confirm("Delete team? Metadata only.")) return;
+        try {
+            await fetch(`/api/teams/${id}`, { method: 'DELETE' });
+            initAdmin();
+        } catch (e) { console.error(e); }
+    }
+
+    document.addEventListener('DOMContentLoaded', initAdmin);
+</script>
+{% endblock %}

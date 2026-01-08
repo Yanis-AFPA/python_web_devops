@@ -63,6 +63,21 @@ async def update_user(
             raise HTTPException(status_code=403, detail="Only admins can change roles")
         user.role = user_update.role
 
+    if user_update.team_id is not None:
+        if not is_admin:
+            raise HTTPException(status_code=403, detail="Only admins can assign teams")
+        # -1 or 0 to clear team? For now user_update.team_id is Optional[int]. 
+        # If client sends null it might mean 'no change' or 'clear'? 
+        # Pydantic dict(exclude_unset=True) usually handles this.
+        # If we want to clear, user might send None explicitly.
+        # But schema says Optional[int] = None.
+        # Let's assume if it's in the payload (set) it's an update.
+        # Note: Pydantic's default is None. 
+        # If we want to support clearing, we might need a distinct Update schema or handle magic value.
+        # For MVP: If you send a valid int, it sets it. If you want to clear, we might need 0.
+        # Let's start with setting valid IDs.
+        user.team_id = user_update.team_id if user_update.team_id > 0 else None
+
     if user_update.password:
         # Everyone can change their own password, admin can change anyone's
         user.password_hash = get_hash(user_update.password)

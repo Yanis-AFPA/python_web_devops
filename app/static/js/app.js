@@ -93,13 +93,35 @@ async function loadUsersForDropdown() {
 
         const sel = document.getElementById('pageAssignee');
         sel.innerHTML = '<option value="">-- Unassigned --</option>';
+
+        const currentRole = window.currentUserRole;
+        const currentId = window.currentUserId;
+        const currentTeamId = window.currentTeamId; // Need to pass this from backend
+
         usersCache.forEach(u => {
-            const opt = document.createElement('option');
-            opt.value = u.id;
-            opt.innerText = u.username;
-            sel.appendChild(opt);
+            // FILTER LOGIC
+            let shouldShow = true;
+
+            if (currentRole === 'manager') {
+                // Manager: Show Self + Team Members + Unassigned (maybe?)
+                // Strict: Team Members only.
+                // If u.team_id == currentTeamId
+                if (currentTeamId) {
+                    shouldShow = (u.team_id === currentTeamId);
+                }
+            } else if (currentRole === 'member') {
+                // Member: Show Self only
+                shouldShow = (u.id === currentId);
+            }
+
+            if (shouldShow || currentRole === 'admin') {
+                const opt = document.createElement('option');
+                opt.value = u.id;
+                opt.innerText = u.username;
+                sel.appendChild(opt);
+            }
         });
-    } catch (e) { console.error("Failed to load users for assignment"); }
+    } catch (e) { console.error("Failed to load users for assignment", e); }
 }
 
 // --- Calendar Functions ---

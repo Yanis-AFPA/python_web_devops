@@ -100,3 +100,15 @@ async def storage(
         "request": request,
         "user": user
     })
+
+@router.get("/admin", response_class=HTMLResponse)
+async def admin_panel(
+    request: Request,
+    user: User = Depends(get_current_user)
+):
+    if not user or user.role != UserRole.ADMIN:
+        return RedirectResponse("/dashboard")
+    return templates.TemplateResponse("admin_teams.html", {
+        "request": request,
+        "user": user
+    })

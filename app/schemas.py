@@ -5,6 +5,7 @@ from app.models import UserRole
 class UserUpdate(SQLModel):
     password: Optional[str] = None
     role: Optional[UserRole] = None
+    team_id: Optional[int] = None
 
 class UserCreate(SQLModel):
     username: str
