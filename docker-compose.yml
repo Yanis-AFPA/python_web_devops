@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=yanis
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=wikiflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  web:
+    build: .
+    restart: always
+    ports:
+      - "8111:8000"
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://yanis:secret@db:5432/wikiflow
+      - SECRET_KEY=supersecretkeyrequiredforauth
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:

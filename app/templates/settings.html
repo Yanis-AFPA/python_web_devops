@@ -1,0 +1,232 @@
+{% extends "layout.html" %}
+
+{% block title %}Settings::Config{% endblock %}
+
+{% block head %}
+<style>
+    .tab-active {
+        border-bottom: 2px solid #58a6ff;
+        color: #58a6ff;
+    }
+
+    .tab-inactive {
+        border-bottom: 2px solid transparent;
+        color: #8b949e;
+    }
+
+    .tab-inactive:hover {
+        border-bottom: 2px solid #30363d;
+        color: #c9d1d9;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-6 h-full font-mono">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-white">> ./config.json</h1>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex border-b border-border mb-6">
+        <button onclick="switchTab('profile')" id="tab-profile"
+            class="px-6 py-2 text-sm font-bold tab-active focus:outline-none">
+            [ PROFILE ]
+        </button>
+        {% if user.role.value == 'admin' %}
+        <button onclick="switchTab('admin')" id="tab-admin"
+            class="px-6 py-2 text-sm font-bold tab-inactive focus:outline-none">
+            [ ADMIN_PANEL ]
+        </button>
+        {% endif %}
+    </div>
+
+    <!-- Profile Tab -->
+    <div id="view-profile" class="max-w-xl">
+        <div class="terminal-card rounded p-6">
+            <h3 class="text-lg font-bold text-white mb-4">Change Password</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs font-bold text-muted uppercase">New Password</label>
+                    <input type="password" id="newPassword"
+                        class="w-full bg-[#0d1117] border border-border px-3 py-2 text-sm text-white focus:border-primary focus:outline-none mt-1">
+                </div>
+                <div>
+                    <button onclick="updatePassword({{ user.id }})"
+                        class="px-4 py-2 bg-primary text-[#0d1117] font-bold text-sm hover:opacity-90">
+                        UPDATE_CREDENTIALS
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if user.role.value == 'admin' %}
+    <!-- Admin Tab -->
+    <div id="view-admin" class="hidden">
+
+        <!-- Create User -->
+        <div class="terminal-card rounded p-4 mb-6">
+            <div class="flex space-x-4 items-end">
+                <div class="flex-1">
+                    <label class="text-[10px] font-bold text-muted uppercase">Username</label>
+                    <input type="text" id="createUsername"
+                        class="w-full bg-[#0d1117] border border-border px-2 py-1 text-sm text-white focus:border-success focus:outline-none">
+                </div>
+                <div class="flex-1">
+                    <label class="text-[10px] font-bold text-muted uppercase">Password</label>
+                    <input type="text" id="createPassword"
+                        class="w-full bg-[#0d1117] border border-border px-2 py-1 text-sm text-white focus:border-success focus:outline-none">
+                </div>
+                <div class="w-32">
+                    <label class="text-[10px] font-bold text-muted uppercase">Role</label>
+                    <select id="createRole"
+                        class="w-full bg-[#0d1117] border border-border px-2 py-1 text-sm text-white focus:border-success focus:outline-none">
+                        <option value="viewer">Viewer</option>
+                        <option value="editor">Editor</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <button onclick="createUser()"
+                    class="px-4 py-1 bg-success text-white text-sm font-bold hover:bg-[#2ea043]">
+                    <i class="fas fa-plus mr-1"></i> ADD_USER
+                </button>
+            </div>
+        </div>
+
+        <!-- User List -->
+        <div class="terminal-card rounded overflow-hidden">
+            <table class="w-full text-left text-sm">
+                <thead>
+                    <tr class="bg-[#161b22] text-muted border-b border-border">
+                        <th class="px-4 py-2 font-mono">ID</th>
+                        <th class="px-4 py-2 font-mono">USERNAME</th>
+                        <th class="px-4 py-2 font-mono">ROLE</th>
+                        <th class="px-4 py-2 font-mono text-right">ACTIONS</th>
+                    </tr>
+                </thead>
+                <tbody id="userListBody" class="divide-y divide-border">
+                    <!-- JS will populate -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const currentUserId = {{ user.id }};
+    const isAdmin = "{{ user.role.value }}" === "admin";
+
+    function switchTab(tab) {
+        document.getElementById('view-profile').classList.add('hidden');
+        document.getElementById('tab-profile').className = "px-6 py-2 text-sm font-bold tab-inactive focus:outline-none";
+
+        if (isAdmin) {
+            document.getElementById('view-admin').classList.add('hidden');
+            document.getElementById('tab-admin').className = "px-6 py-2 text-sm font-bold tab-inactive focus:outline-none";
+        }
+
+        document.getElementById(`view-${tab}`).classList.remove('hidden');
+        document.getElementById(`tab-${tab}`).className = "px-6 py-2 text-sm font-bold tab-active focus:outline-none";
+
+        if (tab === 'admin') loadUsers();
+    }
+
+    async function updatePassword(userId) {
+        const password = document.getElementById('newPassword').value;
+        if (!password) return alert("Password required");
+
+        try {
+            const res = await fetch(`/api/users/${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password })
+            });
+            if (res.ok) {
+                alert("Credentials updated successfully");
+                document.getElementById('newPassword').value = "";
+            } else {
+                alert("Error updating password");
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    // --- Admin Functions ---
+
+    async function loadUsers() {
+        const res = await fetch('/api/users');
+        const users = await res.json();
+        const tbody = document.getElementById('userListBody');
+        tbody.innerHTML = '';
+
+        users.forEach(u => {
+            const tr = document.createElement('tr');
+            tr.className = "hover:bg-[#161b22]";
+            tr.innerHTML = `
+                <td class="px-4 py-2 text-muted">${u.id}</td>
+                <td class="px-4 py-2 text-primary font-bold">${u.username}</td>
+                <td class="px-4 py-2 text-white">
+                    <select onchange="updateRole(${u.id}, this.value)" class="bg-transparent border border-border text-xs px-1 rounded hover:border-primary disabled:border-transparent disabled:opacity-50" ${u.id === currentUserId ? 'disabled' : ''}>
+                        <option value="viewer" ${u.role === 'viewer' ? 'selected' : ''}>Viewer</option>
+                        <option value="editor" ${u.role === 'editor' ? 'selected' : ''}>Editor</option>
+                        <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+                    </select>
+                </td>
+                <td class="px-4 py-2 text-right">
+                    ${u.id !== currentUserId ?
+                    `<button onclick="deleteUser(${u.id})" class="text-danger hover:text-white ml-2"><i class="fas fa-trash"></i></button>`
+                    : '<span class="text-muted text-xs">[SELF]</span>'}
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    async function createUser() {
+        const username = document.getElementById('createUsername').value;
+        const password = document.getElementById('createPassword').value;
+        const role = document.getElementById('createRole').value;
+
+        if (!username || !password) return alert("All fields required");
+
+        try {
+            const res = await fetch('/api/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password, role })
+            });
+            if (res.ok) {
+                document.getElementById('createUsername').value = "";
+                document.getElementById('createPassword').value = "";
+                loadUsers();
+            } else {
+                const err = await res.json();
+                alert("Error: " + err.detail);
+            }
+        } catch (e) { console.error(e); alert("Network Error"); }
+    }
+
+    async function updateRole(id, role) {
+        try {
+            await fetch(`/api/users/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role })
+            });
+        } catch (e) { console.error(e); }
+    }
+
+    async function deleteUser(id) {
+        if (!confirm("CONFIRM DELETION USER ID: " + id + "?")) return;
+        try {
+            await fetch(`/api/users/${id}`, { method: 'DELETE' });
+            loadUsers();
+        } catch (e) { console.error(e); }
+    }
+</script>
+{% endblock %}

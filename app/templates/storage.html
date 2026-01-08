@@ -1,0 +1,115 @@
+{% extends "layout.html" %}
+
+{% block title %}Storage::Mnt{% endblock %}
+
+{% block content %}
+<div class="p-6 h-full font-mono flex flex-col">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-white">> ls -la /mnt/storage</h1>
+        <button onclick="document.getElementById('fileInput').click()"
+            class="px-4 py-2 bg-primary text-[#0d1117] font-bold text-sm hover:opacity-90 flex items-center">
+            <i class="fas fa-upload mr-2"></i> UPLOAD_ARTIFACT
+        </button>
+        <input type="file" id="fileInput" class="hidden" onchange="uploadFile(this)">
+    </div>
+
+    <!-- File Table -->
+    <div class="terminal-card rounded overflow-hidden flex-grow bg-[#0d1117] overflow-y-auto">
+        <table class="w-full text-left text-sm">
+            <thead class="sticky top-0 bg-[#161b22] z-10">
+                <tr class="text-muted border-b border-border">
+                    <th class="px-4 py-3 font-mono w-10">MODE</th>
+                    <th class="px-4 py-3 font-mono">FILENAME</th>
+                    <th class="px-4 py-3 font-mono">SIZE</th>
+                    <th class="px-4 py-3 font-mono">OWNER</th>
+                    <th class="px-4 py-3 font-mono">DATE</th>
+                    <th class="px-4 py-3 font-mono text-right">ACTIONS</th>
+                </tr>
+            </thead>
+            <tbody id="fileListBody" class="divide-y divide-border">
+                <!-- JS Populated -->
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const currentUserId = {{ user.id }};
+    const currentUserRole = "{{ user.role.value }}";
+
+    document.addEventListener('DOMContentLoaded', loadFiles);
+
+    async function loadFiles() {
+        try {
+            const res = await fetch('/api/files');
+            const files = await res.json();
+            const tbody = document.getElementById('fileListBody');
+            tbody.innerHTML = '';
+
+            if (files.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-muted">No artifacts found.</td></tr>';
+                return;
+            }
+
+            files.forEach(f => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-[#161b22] group";
+                tr.innerHTML = `
+                    <td class="px-4 py-3 text-muted">-rw-r--r--</td>
+                    <td class="px-4 py-3 text-white font-bold flex items-center">
+                        <i class="fas fa-file-alt mr-3 text-muted group-hover:text-primary"></i>
+                        <a href="${f.url}" target="_blank" class="hover:underline">${f.filename}</a>
+                    </td>
+                    <td class="px-4 py-3 text-muted">${formatBytes(f.filesize)}</td>
+                    <td class="px-4 py-3 text-muted">uid:${f.uploaded_by_id}</td>
+                    <td class="px-4 py-3 text-muted">${new Date(f.uploaded_at).toLocaleString()}</td>
+                    <td class="px-4 py-3 text-right">
+                        <a href="${f.url}" download class="text-primary hover:text-white mr-3"><i class="fas fa-download"></i></a>
+                        ${(currentUserRole === 'admin' || f.uploaded_by_id === currentUserId) ?
+                        `<button onclick="deleteFile(${f.id})" class="text-danger hover:text-white"><i class="fas fa-trash"></i></button>` : ''}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (e) { console.error(e); }
+    }
+
+    async function uploadFile(input) {
+        if (!input.files || input.files.length === 0) return;
+        const file = input.files[0];
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            // Optional: Show loading state
+            const res = await fetch('/api/files', { method: 'POST', body: formData });
+            if (res.ok) {
+                loadFiles();
+            } else {
+                alert("Upload failed");
+            }
+        } catch (e) { console.error(e); alert("Network error"); }
+        input.value = ""; // Reset
+    }
+
+    async function deleteFile(id) {
+        if (!confirm("DELETE ARTIFACT ID: " + id + "?")) return;
+        try {
+            const res = await fetch(`/api/files/${id}`, { method: 'DELETE' });
+            if (res.ok) loadFiles();
+            else alert("Delete failed");
+        } catch (e) { console.error(e); }
+    }
+
+    function formatBytes(bytes, decimals = 2) {
+        if (!+bytes) return '0 B';
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+    }
+</script>
+{% endblock %}

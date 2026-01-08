@@ -1,0 +1,102 @@
+{% extends "layout.html" %}
+
+{% block title %}Dashboard::System{% endblock %}
+
+{% block content %}
+<div class="p-6 h-full pb-20">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-white font-mono">> ./dashboard.sh</h1>
+        <span class="px-2 py-1 bg-success/10 text-success border border-success/20 text-xs font-mono rounded">SYSTEM:
+            OPTIMAL</span>
+    </div>
+
+    <!-- Metrics Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <!-- Throughput Chart -->
+        <div class="terminal-card rounded overflow-hidden">
+            <div class="terminal-header">
+                <span><i class="fas fa-chart-bar mr-2"></i>WEEKLY_THROUGHPUT</span>
+                <span class="text-[10px] opacity-50">./pages_count</span>
+            </div>
+            <div class="p-4 bg-[#0d1117]">
+                <div style="height: 200px;">
+                    <canvas id="pagesChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Distribution Chart -->
+        <div class="terminal-card rounded overflow-hidden">
+            <div class="terminal-header">
+                <span><i class="fas fa-chart-pie mr-2"></i>TYPE_DISTRIBUTION</span>
+                <span class="text-[10px] opacity-50">./categories</span>
+            </div>
+            <div class="p-4 bg-[#0d1117]">
+                <div style="height: 200px; display: flex; justify-content: center;">
+                    <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity Log -->
+    <div class="terminal-card rounded overflow-hidden">
+        <div class="terminal-header">
+            <span><i class="fas fa-history mr-2"></i>RECENT_LOGS</span>
+            <span class="text-[10px] opacity-50">tail -n 5 activity.log</span>
+        </div>
+        <div class="bg-[#0d1117]">
+            <ul class="divide-y divide-border">
+                {% for page in recent_pages %}
+                <li class="px-4 py-3 hover:bg-[#161b22] transition-colors group">
+                    <a href="/calendar?date={{ page.start_time.strftime('%Y-%m-%d') }}"
+                        class="flex items-center justify-between">
+                        <div class="flex items-center min-w-0">
+                            <!-- Status Icon -->
+                            <div class="mr-3">
+                                {% if page.category.value == 'incident' %}
+                                <span class="text-danger font-mono font-bold">[ERR]</span>
+                                {% elif page.category.value == 'project' %}
+                                <span class="text-success font-mono font-bold">[PRJ]</span>
+                                {% elif page.category.value == 'meeting' %}
+                                <span class="text-primary font-mono font-bold">[MTG]</span>
+                                {% else %}
+                                <span class="text-warning font-mono font-bold">[LOG]</span>
+                                {% endif %}
+                            </div>
+                            <!-- Title -->
+                            <div>
+                                <div
+                                    class="text-sm font-mono text-text truncate group-hover:text-white transition-colors">
+                                    {{ page.title }}
+                                </div>
+                                <div class="text-xs text-muted font-mono">
+                                    authored_by: {{ page.author.username }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Timestamp -->
+                        <div class="text-xs text-muted font-mono whitespace-nowrap">
+                            {{ page.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                        </div>
+                    </a>
+                </li>
+                {% else %}
+                <li class="px-6 py-8 text-muted text-center font-mono text-sm">No activity logs found.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="/static/js/app.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        initDashboard();
+    });
+</script>
+{% endblock %}

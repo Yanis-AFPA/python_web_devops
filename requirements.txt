@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+sqlmodel
+asyncpg
+psycopg2-binary
+passlib[bcrypt]
+python-multipart
+python-dotenv
+python-jose[cryptography]
+jinja2
+bcrypt==3.2.2

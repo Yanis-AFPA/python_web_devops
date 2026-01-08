@@ -1,0 +1,147 @@
+{% extends "layout.html" %}
+
+{% block title %}Calendar::IDE{% endblock %}
+
+{% block head %}
+
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+<style>
+    /* IDE Split View Transition */
+    #editorOverlay {
+        transition: transform 0.2s ease-in-out;
+        box-shadow: -5px 0 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .translate-x-full {
+        transform: translateX(100%);
+    }
+
+    .translate-x-0 {
+        transform: translateX(0);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="relative flex h-full overflow-hidden">
+    <!-- Calendar View (Left Panel) -->
+    <div class="flex-grow p-4 overflow-hidden flex flex-col h-full">
+        <div class="terminal-card rounded h-full flex flex-col bg-[#0d1117] relative">
+            <div class="terminal-header border-b-0 pb-0">
+                <span>calendar.py</span>
+            </div>
+            <div id="calendar" class="flex-grow p-2 text-sm"></div>
+        </div>
+    </div>
+
+    <!-- Editor View (Right Panel / Overlay) -->
+    <div id="editorOverlay"
+        class="absolute top-0 right-0 h-full w-2/3 bg-[#0d1117] border-l border-border transform translate-x-full z-50 flex flex-col">
+
+        <!-- Tab Bar -->
+        <div class="h-10 bg-[#161b22] border-b border-border flex items-center justify-between px-0 select-none">
+            <div class="flex">
+                <div
+                    class="px-4 py-2 bg-[#0d1117] border-t-2 border-primary text-text text-sm font-mono border-r border-border flex items-center">
+                    <i class="fas fa-file-code mr-2 text-primary text-xs"></i>
+                    <span id="tabTitle">untitled.md</span>
+                    <button id="closeEditor" class="ml-3 hover:text-white"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="px-4 py-2 text-muted text-sm font-mono flex items-center cursor-not-allowed opacity-50">
+                    <i class="fas fa-file-alt mr-2 text-muted text-xs"></i>
+                    preview.html
+                </div>
+            </div>
+            <div class="px-4 flex items-center space-x-3">
+                <div id="saveStatus" class="text-xs font-mono text-success hidden"><i class="fas fa-check"></i> SAVED
+                </div>
+                <button id="deleteBtn" class="text-muted hover:text-danger" title="Delete File"><i
+                        class="fas fa-trash-alt"></i></button>
+                <button id="saveBtn" class="text-muted hover:text-primary transition-transform active:scale-95"
+                    title="Save File (Ctrl+S)"><i class="fas fa-save text-lg"></i></button>
+            </div>
+        </div>
+
+        <!-- Meta Inputs (Like Frontmatter) -->
+        <div class="px-6 py-4 border-b border-border bg-[#0d1117] space-y-4">
+            <div class="grid grid-cols-12 gap-4">
+                <div class="col-span-8">
+                    <label class="block text-[10px] font-mono text-muted uppercase mb-1">TITLE</label>
+                    <input type="text" id="pageTitle"
+                        class="w-full bg-[#161b22] border border-border text-white px-3 py-1 text-sm font-mono focus:border-primary focus:ring-0 focus:outline-none placeholder-gray-600"
+                        placeholder="Task Title...">
+                </div>
+                <div class="col-span-4">
+                    <label class="block text-[10px] font-mono text-muted uppercase mb-1">PRIORITY</label>
+                    <select id="pagePriority"
+                        class="w-full bg-[#161b22] border border-border text-white px-3 py-1 text-sm font-mono focus:border-primary focus:ring-0 focus:outline-none">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">CRITICAL</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid grid-cols-12 gap-4">
+                <div class="col-span-6">
+                    <label class="block text-[10px] font-mono text-muted uppercase mb-1">ASSIGNEE</label>
+                    <select id="pageAssignee"
+                        class="w-full bg-[#161b22] border border-border text-white px-3 py-1 text-sm font-mono focus:border-primary focus:ring-0 focus:outline-none">
+                        <option value="">-- Unassigned --</option>
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+                <div class="col-span-6">
+                    <label class="block text-[10px] font-mono text-muted uppercase mb-1">TYPE</label>
+                    <select id="pageCategory"
+                        class="w-full bg-[#161b22] border border-border text-white px-3 py-1 text-sm font-mono focus:border-primary focus:ring-0 focus:outline-none">
+                        <option value="meeting">Meeting</option>
+                        <option value="project">Project</option>
+                        <option value="incident">Incident</option>
+                        <option value="personal">Personal</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toolbar (Custom Styled) -->
+        <div id="toolbar-container" class="border-b border-border bg-[#161b22] px-2 py-1">
+            <!-- Quill fills this -->
+        </div>
+
+        <!-- Editor Content -->
+        <div class="flex-grow overflow-hidden relative bg-[#0d1117]">
+            <!-- Line Numbers Gutter simulation (Static for visual) -->
+            <div
+                class="absolute left-0 top-0 bottom-0 w-8 bg-[#0d1117] border-r border-[#161b22] text-right pr-2 pt-4 text-[10px] font-mono text-muted select-none z-10 hidden md:block">
+                1<br>2<br>3<br>4<br>5<br>6
+            </div>
+            <div id="editor-container" class="h-full border-none md:pl-2"></div>
+        </div>
+
+        <!-- Footer Status Bar -->
+        <div
+            class="h-6 bg-primary text-[#0d1117] text-[10px] font-mono flex items-center px-4 justify-between font-bold">
+            <span>-- INSERT --</span>
+            <span id="cursorPos">Ln 1, Col 1</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.8/locales/fr.global.min.js'></script>
+<script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+<script>
+    // Pass user permissions to JS
+    window.currentUserRole = "{{ user.role.value }}";
+    window.currentUserId = Number("{{ user.id }}");
+</script>
+<script src="/static/js/app.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        initCalendar();
+    });
+</script>
+{% endblock %}

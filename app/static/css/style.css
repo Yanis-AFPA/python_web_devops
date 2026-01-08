@@ -1,0 +1,112 @@
+/* Terminal Scrollbar */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #0d1117;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #30363d;
+    border: 1px solid #0d1117;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #484f58;
+}
+
+/* FullCalendar DevOps Theme Overrides */
+.fc {
+    font-family: 'JetBrains Mono', monospace !important;
+}
+
+.fc .fc-toolbar-title {
+    font-size: 1.25rem !important;
+    font-weight: 700;
+    color: #c9d1d9 !important;
+}
+
+.fc .fc-button-primary {
+    background-color: #21262d;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    text-transform: lowercase;
+    font-size: 0.85rem;
+    border-radius: 0;
+}
+
+.fc .fc-button-primary:hover {
+    background-color: #30363d;
+    border-color: #8b949e;
+}
+
+.fc .fc-button-primary:not(:disabled).fc-button-active {
+    background-color: #58a6ff !important;
+    border-color: #58a6ff !important;
+    color: #0d1117 !important;
+    font-weight: bold;
+}
+
+.fc-theme-standard td,
+.fc-theme-standard th,
+.fc-theme-standard .fc-scrollgrid {
+    border-color: #30363d !important;
+}
+
+.fc-day-today {
+    background-color: rgba(88, 166, 255, 0.05) !important;
+}
+
+.fc-event {
+    border: 1px solid transparent;
+    border-radius: 2px;
+    padding: 2px 4px;
+    font-size: 0.75rem;
+}
+
+/* Quill Editor DevOps Theme */
+.ql-toolbar {
+    border-color: #30363d !important;
+    background-color: #161b22;
+    font-family: 'Inter', sans-serif;
+}
+
+.ql-container {
+    border: none !important;
+    background-color: #0d1117;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 1rem;
+    color: #c9d1d9;
+}
+
+.ql-editor.ql-blank::before {
+    color: #484f58;
+    font-style: normal;
+    font-family: 'JetBrains Mono', monospace;
+    opacity: 0.7;
+}
+
+.ql-editor {
+    padding: 1rem;
+}
+
+/* Custom Utilities */
+.terminal-card {
+    background-color: #0d1117;
+    border: 1px solid #30363d;
+}
+
+.terminal-header {
+    background-color: #161b22;
+    border-bottom: 1px solid #30363d;
+    padding: 0.5rem 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #8b949e;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
