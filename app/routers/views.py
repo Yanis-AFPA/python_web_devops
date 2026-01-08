@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_session
 from app.auth import get_current_user, verify_password, create_access_token, get_password_hash
-from app.models import User, Page, UserRole, PageStatus
+from app.models import User, Page, UserRole, PageStatus, PagePriority
 from sqlmodel.ext.asyncio.session import AsyncSession
 from datetime import timedelta
 
@@ -53,16 +53,48 @@ async def dashboard(
     if not user:
         return RedirectResponse("/login")
         
-    # Recent Pages
-    # Eager load author for dashboard template
-    query = select(Page).options(selectinload(Page.author)).order_by(desc(Page.updated_at)).limit(5)
+    # Dashboard Tasks Logic
+    # 1. Base Query with Eager Loading
+    query = select(Page).options(selectinload(Page.author), selectinload(Page.assignee))
+    
+    # 2. Role Filtering
+    if user.role == UserRole.MEMBER:
+        query = query.where(Page.assignee_id == user.id)
+    elif user.role == UserRole.MANAGER and user.team_id:
+        query = query.join(Page.assignee).where(User.team_id == user.team_id)
+    # Admin sees all (no filter)
+
+    # 3. Status Filtering (Active only for tactical view)
+    # displaying TODO and IN_PROGRESS. We might exclude DONE to keep the list clean, 
+    # or keep them if updated recently. Let's keep Active for now as per "Tactical" goal.
+    query = query.where(Page.status.in_([PageStatus.TODO, PageStatus.IN_PROGRESS]))
+
     result = await session.exec(query)
-    recent_pages = result.all()
+    tasks = result.all()
+
+    # 4. Python Sorting
+    # Priority Order: Critical(0) -> High(1) -> Medium(2) -> Low(3)
+    priority_map = {
+        PagePriority.CRITICAL: 0,
+        PagePriority.HIGH: 1,
+        PagePriority.MEDIUM: 2,
+        PagePriority.LOW: 3
+    }
+    
+    # Sort: Priority ASC, then EndTime ASC (Earliest deadline first)
+    # Handle None for end_time by using max datetime (push to bottom) or min? Usually deadlines are critical.
+    # If no deadline, maybe less urgent? Let's use max.
+    from datetime import datetime
+    
+    sorted_tasks = sorted(tasks, key=lambda p: (
+        priority_map.get(p.priority, 4),
+        p.end_time or datetime.max
+    ))
     
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "user": user,
-        "recent_pages": recent_pages
+        "dashboard_tasks": sorted_tasks  # Renamed from recent_pages
     })
 
 @router.get("/calendar", response_class=HTMLResponse)

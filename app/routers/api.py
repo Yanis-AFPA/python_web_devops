@@ -59,6 +59,17 @@ async def get_pages(
     result = await session.exec(query)
     return result.all()
 
+@router.get("/pages/{page_id}", response_model=PageRead)
+async def get_page(
+    page_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    page = await session.get(Page, page_id)
+    if not page:
+        raise HTTPException(status_code=404, detail="Page introuvable")
+    return page
+
 @router.post("/pages", response_model=PageRead)
 async def create_page(
     page_data: PageCreate,
@@ -163,20 +174,82 @@ async def get_metrics(
 ):
     from sqlalchemy import func
     
-    # Pages created this week
-    now = datetime.utcnow()
-    start_of_week = now - timedelta(days=now.weekday())
-    
-    query_week = select(func.count(Page.id)).where(Page.created_at >= start_of_week)
-    count_week_res = await session.exec(query_week)
-    count_week = count_week_res.one()
-    
-    # Distribution by category
-    query_cat = select(Page.category, func.count(Page.id)).group_by(Page.category)
-    res_cat = await session.exec(query_cat)
-    categories = res_cat.all() # [(category, count), ...]
-    
-    return {
-        "new_pages_week": count_week,
-        "categories": {cat.value: count for cat, count in categories}
+    response_data = {
+        "role": current_user.role.value,
+        "username": current_user.username,
+        "context": {}
     }
+
+    if current_user.role == UserRole.MEMBER:
+        # MEMBER: Personal Stats (My Tasks by Status)
+        query = select(Page.status, func.count(Page.id))\
+            .where(Page.assignee_id == current_user.id)\
+            .group_by(Page.status)
+        result = await session.exec(query)
+        stats = {s.value: c for s, c in result.all()}
+        
+        response_data["context"] = {
+            "my_stats": {
+                "todo": stats.get("todo", 0),
+                "in_progress": stats.get("in_progress", 0),
+                "done": stats.get("done", 0)
+            }
+        }
+
+    elif current_user.role == UserRole.MANAGER:
+        # MANAGER: Team Stats
+        # 1. Team Overview (All tasks assigned to team members + unassigned but likely in team scope? 
+        # Actually our scoped query in get_pages uses team members. Let's do that.)
+        
+        if current_user.team_id:
+            sub_team = select(User.id).where(User.team_id == current_user.team_id)
+            
+            # Status Distribution
+            q_status = select(Page.status, func.count(Page.id))\
+                .where(Page.assignee_id.in_(sub_team))\
+                .group_by(Page.status)
+            r_status = await session.exec(q_status)
+            stats_status = {s.value: c for s, c in r_status.all()}
+            
+            # Workload (Active Tasks per Member)
+            # Active = Todo or In Progress
+            q_workload = select(User.username, func.count(Page.id))\
+                .join(Page, User.id == Page.assignee_id)\
+                .where(User.team_id == current_user.team_id)\
+                .where(Page.status.in_([PageStatus.TODO, PageStatus.IN_PROGRESS]))\
+                .group_by(User.username)
+            r_workload = await session.exec(q_workload)
+            workload = {u: c for u, c in r_workload.all()}
+            
+            response_data["context"] = {
+                "team_stats": {
+                    "todo": stats_status.get("todo", 0),
+                    "in_progress": stats_status.get("in_progress", 0),
+                    "done": stats_status.get("done", 0)
+                },
+                "workload": workload
+            }
+        else:
+             response_data["context"] = {"error": "No Team Assigned"}
+
+    else:
+        # ADMIN: System Overview (The old view)
+        now = datetime.utcnow()
+        start_of_week = now - timedelta(days=now.weekday())
+        
+        query_week = select(func.count(Page.id)).where(Page.created_at >= start_of_week)
+        count_week_res = await session.exec(query_week)
+        count_week = count_week_res.one()
+        
+        query_cat = select(Page.category, func.count(Page.id)).group_by(Page.category)
+        res_cat = await session.exec(query_cat)
+        categories = res_cat.all()
+        
+        response_data["context"] = {
+            "system_stats": {
+                "new_pages_week": count_week,
+                "categories": {cat.value: count for cat, count in categories}
+            }
+        }
+    
+    return response_data

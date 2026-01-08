@@ -10,10 +10,10 @@ class UserRole(str, Enum):
     MEMBER = "member"
 
 class PageCategory(str, Enum):
+    FEATURE = "feature"
+    BUG = "bug"
+    DEVOPS = "devops"
     MEETING = "meeting"
-    PROJECT = "project"
-    INCIDENT = "incident"
-    PERSONAL = "personal"
 
 class PageStatus(str, Enum):
     TODO = "todo"
@@ -64,7 +64,7 @@ class PageBase(SQLModel):
     content: str = Field(sa_column_kwargs={"default": ""})
     start_time: datetime = Field(default_factory=datetime.utcnow)
     end_time: Optional[datetime] = None
-    category: PageCategory = Field(default=PageCategory.PERSONAL)
+    category: PageCategory = Field(default=PageCategory.FEATURE)
     status: PageStatus = Field(default=PageStatus.TODO)
     priority: PagePriority = Field(default=PagePriority.MEDIUM)
     assignee_id: Optional[int] = Field(default=None, foreign_key="user.id")

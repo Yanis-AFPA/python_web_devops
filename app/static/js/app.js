@@ -4,6 +4,52 @@ let quill;
 let currentEventId = null;
 
 // --- Helper Colors ---
+async function updateTaskStatus(pageId, newStatus) {
+    // Quick and dirty status update for Dashboard
+    try {
+        // 1. Fetch current to get other fields (required by PUT model if not partial)
+        // Wait, our PUT requires all fields?
+        // Let's check updateEventDate logic. It sends everything.
+        // If we only send status, we might lose data if backend validation is strict on missing fields?
+        // SQLModel with default=None and update logic usually merges.
+        // But app logic in updateEventDate reconstructs the whole object.
+        // Let's rely on a backend PATCH or just fetch-modify-save pattern if strict.
+        // Given complexity, let's try a PATCH-like approach: fetching first.
+
+        const getRes = await fetch(`/api/pages/${pageId}`);
+        const currentData = await getRes.json();
+
+        const payload = {
+            title: currentData.title,
+            content: currentData.content,
+            start_time: currentData.start_time,
+            end_time: currentData.end_time,
+            category: currentData.category,
+            priority: currentData.priority,
+            assignee_id: currentData.assignee_id,
+            status: newStatus // The change
+        };
+
+        const res = await fetch(`/api/pages/${pageId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            // Visual feedback?
+            // Maybe color change? Class manipulation is hard inline.
+            // Reload dashboard metrics to reflect change
+            initDashboard();
+        } else {
+            alert("Update failed.");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Network error");
+    }
+}
+
 function getColorForStatus(status) {
     switch (status) {
         case 'todo': return '#6c757d'; // Gray
@@ -19,64 +65,146 @@ async function initDashboard() {
     try {
         const response = await fetch('/api/metrics');
         const data = await response.json();
+        const role = data.role;
+        const ctxData = data.context;
 
-        // Pages per Week Chart
-        const ctxPages = document.getElementById('pagesChart').getContext('2d');
-        new Chart(ctxPages, {
-            type: 'bar',
-            data: {
-                labels: ['Cette semaine'],
-                datasets: [{
-                    label: 'Commits (Pages)',
-                    data: [data.new_pages_week],
-                    backgroundColor: '#238636', // GitHub Green
-                    borderColor: '#2ea043',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: { color: '#8b949e', font: { family: "'JetBrains Mono'" } },
-                        grid: { color: '#30363d' }
+        // --- MEMBER ---
+        if (role === 'member') {
+            const stats = ctxData.my_stats || { todo: 0, in_progress: 0, done: 0 };
+
+            // DOM Counters
+            document.getElementById('stat-todo').innerText = stats.todo;
+            document.getElementById('stat-inprogress').innerText = stats.in_progress;
+            document.getElementById('stat-done').innerText = stats.done;
+
+            // Simple Pie
+            const ctx = document.getElementById('memberChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['To Do', 'In Progress', 'Done'],
+                    datasets: [{
+                        data: [stats.todo, stats.in_progress, stats.done],
+                        backgroundColor: ['#6c757d', '#0d6efd', '#198754'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right', labels: { color: '#c9d1d9' } } }
+                }
+            });
+        }
+
+        // --- MANAGER ---
+        else if (role === 'manager') {
+            if (ctxData.error) {
+                console.warn("Manager has no team.");
+                return;
+            }
+
+            // Team Status Bar/Doughnut
+            const teamStats = ctxData.team_stats;
+            const ctxTeam = document.getElementById('teamStatusChart').getContext('2d');
+            new Chart(ctxTeam, {
+                type: 'bar', // or doughnut
+                data: {
+                    labels: ['To Do', 'In Progress', 'Done'],
+                    datasets: [{
+                        label: 'Tasks',
+                        data: [teamStats.todo, teamStats.in_progress, teamStats.done],
+                        backgroundColor: ['#6c757d', '#0d6efd', '#198754']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, ticks: { color: '#8b949e' }, grid: { color: '#30363d' } },
+                        x: { ticks: { color: '#8b949e' }, grid: { display: false } }
                     },
-                    x: {
-                        ticks: { color: '#8b949e', font: { family: "'JetBrains Mono'" } },
-                        grid: { display: false }
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            // Workload (Horizontal Bar)
+            const workload = ctxData.workload; // {username: count}
+            const workers = Object.keys(workload);
+            const counts = Object.values(workload);
+
+            const ctxWork = document.getElementById('workloadChart').getContext('2d');
+            new Chart(ctxWork, {
+                type: 'bar',
+                indexAxis: 'y',
+                data: {
+                    labels: workers,
+                    datasets: [{
+                        label: 'Active Tasks',
+                        data: counts,
+                        backgroundColor: '#d29922'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { beginAtZero: true, ticks: { color: '#8b949e' }, grid: { color: '#30363d' } },
+                        y: { ticks: { color: '#8b949e' }, grid: { display: false } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        // --- ADMIN ---
+        else {
+            const system = ctxData.system_stats;
+
+            // Pages Chart
+            const ctxPage = document.getElementById('adminPageChart').getContext('2d');
+            new Chart(ctxPage, {
+                type: 'line',
+                data: {
+                    labels: ['This Week'],
+                    datasets: [{
+                        label: 'New Pages',
+                        data: [system.new_pages_week],
+                        borderColor: '#238636',
+                        backgroundColor: '#238636',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, ticks: { color: '#8b949e' }, grid: { color: '#30363d' } },
+                        x: { ticks: { color: '#8b949e' }, grid: { display: false } }
                     }
                 }
-            }
-        });
+            });
 
-        // Categories Chart
-        const ctxCat = document.getElementById('categoryChart').getContext('2d');
-        const catLabels = Object.keys(data.categories);
-        const catData = Object.values(data.categories);
-
-        new Chart(ctxCat, {
-            type: 'doughnut',
-            data: {
-                labels: catLabels,
-                datasets: [{
-                    data: catData,
-                    // Colors: Info(Blue), Success(Green), Error(Red), Warning(Purple->Gold for project)
-                    backgroundColor: ['#58a6ff', '#238636', '#da3633', '#d29922'],
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '70%',
-                plugins: {
-                    legend: { position: 'right', labels: { color: '#c9d1d9', font: { family: "'JetBrains Mono'" } } }
+            // Cats
+            const cats = system.categories;
+            const ctxCat = document.getElementById('adminCatChart').getContext('2d');
+            new Chart(ctxCat, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(cats),
+                    datasets: [{
+                        data: Object.values(cats),
+                        backgroundColor: ['#8957e5', '#d29922', '#2da44e', '#a371f7'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right', labels: { color: '#c9d1d9' } } }
                 }
-            }
-        });
+            });
+        }
 
     } catch (e) {
         console.error("Error loading dashboard metrics:", e);
@@ -212,10 +340,11 @@ function initCalendar() {
 
 function getCategoryColor(category) {
     switch (category) {
-        case 'meeting': return '#58a6ff'; // blue
-        case 'project': return '#238636'; // green
-        case 'incident': return '#da3633'; // red
-        default: return '#30363d'; // grey (personal/other)
+        case 'feature': return '#8957e5'; // Purple
+        case 'bug': return '#d29922'; // Orange
+        case 'devops': return '#2da44e'; // Green/Cyan
+        case 'meeting': return '#a371f7'; // Lilac
+        default: return '#58a6ff';
     }
 }
 
@@ -308,76 +437,93 @@ function openEditor(data, isExisting = false) {
     const overlay = document.getElementById('editorOverlay');
     overlay.classList.remove('translate-x-full');
 
+    // Reset Fields first to avoid stale data
+    document.getElementById('saveBtn').style.display = 'block';
+    document.getElementById('deleteBtn').style.display = 'none';
+
     if (isExisting) {
+        // --- EXISTING EVENT ---
         currentEventId = data.id;
         document.getElementById('pageTitle').value = data.title;
         document.getElementById('tabTitle').innerText = data.title + ".md";
-        document.getElementById('pageCategory').value = data.extendedProps.category;
 
         // Pivot Fields
+        document.getElementById('pageCategory').value = data.extendedProps.category || 'feature';
         document.getElementById('pagePriority').value = data.extendedProps.priority || 'medium';
         document.getElementById('pageAssignee').value = data.extendedProps.assignee_id || "";
         document.getElementById('pageStatus').value = data.extendedProps.status || 'todo';
 
-        // Load content
-        // IMPORTANT: data.extendedProps.content might be stale if we didn't refetch. 
-        // For production apps, fetch full details here. For MVP, we use the props from calendar load.
-        // Assuming the calendar 'events' feed returns full content.
         quill.root.innerHTML = data.extendedProps.content || "";
 
-        // RBAC Check for Delete button
-        const canDelete = (window.currentUserRole === 'admin') || (window.currentUserRole === 'manager');
+        // RBAC logic for existing
+        const isMember = window.currentUserRole === 'member';
+        const isAssignedToMe = (data.extendedProps.assignee_id === window.currentUserId);
 
-        document.getElementById('deleteBtn').style.display = canDelete ? 'inline-block' : 'none';
-
-    } else {
-        // New
-        currentEventId = null;
-        document.getElementById('pageTitle').value = "";
-        document.getElementById('tabTitle').innerText = "untitled.md";
-        document.getElementById('pagePriority').value = "medium";
-        document.getElementById('pagePriority').value = "medium";
-        document.getElementById('pageAssignee').value = "";
-        document.getElementById('pageStatus').value = "todo";
-        quill.root.innerHTML = "";
-
-        // Temporary holding dates
-        window.tempDates = { start: data.start, end: data.end };
-
-        document.getElementById('deleteBtn').style.display = 'none';
-    }
-
-    // RBAC: Read-only logic
-    const isMember = window.currentUserRole === 'member';
-
-    if (isMember) {
-        // Members can ONLY change status (if existing task)
-        // If creating new task: they can edit everything. (Assuming they can create self-tasks)
-        // Let's refine based on user request "ne voit que leur tache mais peuvent change le status"
-
-        if (isExisting) {
+        if (isMember) {
+            // Member can only edit STATUS if assigned to them
+            // All other fields read-only
             quill.disable();
             document.getElementById('pageTitle').disabled = true;
             document.getElementById('pageCategory').disabled = true;
             document.getElementById('pagePriority').disabled = true;
             document.getElementById('pageAssignee').disabled = true;
-            // Status is ENABLED for Members
-            document.getElementById('pageStatus').disabled = false;
+
+            if (isAssignedToMe) {
+                document.getElementById('pageStatus').disabled = false;
+                document.getElementById('saveBtn').style.display = 'block';
+            } else {
+                document.getElementById('pageStatus').disabled = true;
+                document.getElementById('saveBtn').style.display = 'none'; // Cannot save anything
+            }
+
+            // Delete hidden for members
+            document.getElementById('deleteBtn').style.display = 'none';
         } else {
-            // Creation mode: Enable all
+            // Manager / Admin: Edit All
             quill.enable();
             document.getElementById('pageTitle').disabled = false;
+            document.getElementById('pageCategory').disabled = false;
+            document.getElementById('pagePriority').disabled = false;
+            document.getElementById('pageAssignee').disabled = false;
+            document.getElementById('pageStatus').disabled = false;
+            document.getElementById('saveBtn').style.display = 'block';
+
+            // Delete button logic
+            document.getElementById('deleteBtn').style.display = 'inline-block';
         }
-        document.getElementById('saveBtn').style.display = 'block';
+
     } else {
-        // Admin / Manager
+        // --- NEW EVENT ---
+        currentEventId = null;
+        document.getElementById('pageTitle').value = "";
+        document.getElementById('tabTitle').innerText = "untitled.md";
+        document.getElementById('pageCategory').value = 'feature';
+        document.getElementById('pagePriority').value = 'medium';
+        document.getElementById('pageStatus').value = 'todo';
+        quill.root.innerHTML = "";
+
+        // Dates
+        window.tempDates = { start: data.start, end: data.end };
+
+        // RBAC logic for creation
+        const isMember = window.currentUserRole === 'member';
+        const assigneeSelect = document.getElementById('pageAssignee');
+
         quill.enable();
         document.getElementById('pageTitle').disabled = false;
         document.getElementById('pageCategory').disabled = false;
         document.getElementById('pagePriority').disabled = false;
-        document.getElementById('pageAssignee').disabled = false;
         document.getElementById('pageStatus').disabled = false;
-        document.getElementById('saveBtn').style.display = 'block';
+
+        if (isMember) {
+            // Member creates -> Auto-assign to self, locked
+            assigneeSelect.value = window.currentUserId;
+            assigneeSelect.disabled = true;
+        } else {
+            // Manager/Admin -> Can assign to anyone (filtered by team if manager, handled by init)
+            assigneeSelect.value = "";
+            assigneeSelect.disabled = false;
+        }
     }
 }
 

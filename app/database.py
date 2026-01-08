@@ -68,12 +68,12 @@ async def init_db():
                 # Engineering Tasks (Team Dev)
                 Page(title="Refactor Authentication Module", content="Switch to JWT strict mode and improving logout", 
                      start_time=now, end_time=now + timedelta(hours=4), 
-                     status=PageStatus.IN_PROGRESS, priority=PagePriority.HIGH, category=PageCategory.PROJECT,
+                     status=PageStatus.IN_PROGRESS, priority=PagePriority.HIGH, category=PageCategory.FEATURE,
                      author_id=users[1].id, assignee_id=users[2].id), # Manager -> Alice
                      
                 Page(title="Fix CI/CD Pipeline", content="Pipeline failing on Docker build step", 
                      start_time=now + timedelta(days=1), end_time=now + timedelta(days=1, hours=2), 
-                     status=PageStatus.TODO, priority=PagePriority.CRITICAL, category=PageCategory.INCIDENT,
+                     status=PageStatus.TODO, priority=PagePriority.CRITICAL, category=PageCategory.DEVOPS,
                      author_id=users[1].id, assignee_id=users[3].id), # Manager -> Bob
 
                 Page(title="Weekly Code Review", content="Reviewing PRs for the new release", 
@@ -84,7 +84,7 @@ async def init_db():
                 # Operations Tasks (Team Ops)
                 Page(title="Server Maintenance", content="Upgrade kernel on prod servers", 
                      start_time=now, end_time=now + timedelta(hours=3), 
-                     status=PageStatus.DONE, priority=PagePriority.HIGH, category=PageCategory.INCIDENT,
+                     status=PageStatus.DONE, priority=PagePriority.HIGH, category=PageCategory.DEVOPS,
                      author_id=users[4].id, assignee_id=users[4].id), # Ops Lead Self
             ]
             

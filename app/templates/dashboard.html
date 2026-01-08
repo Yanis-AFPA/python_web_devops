@@ -11,81 +11,156 @@
     </div>
 
     <!-- Metrics Grid -->
+    <!-- Role-Based Content -->
+    {% if user.role.value == 'member' %}
+    <!-- MEMBER VIEW -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="terminal-card rounded p-4 bg-[#0d1117] flex flex-col items-center justify-center">
+            <h3 class="text-muted text-xs uppercase mb-2">MY_TODO</h3>
+            <span class="text-4xl font-mono text-gray-400" id="stat-todo">-</span>
+        </div>
+        <div class="terminal-card rounded p-4 bg-[#0d1117] flex flex-col items-center justify-center">
+            <h3 class="text-muted text-xs uppercase mb-2">IN_PROGRESS</h3>
+            <span class="text-4xl font-mono text-primary" id="stat-inprogress">-</span>
+        </div>
+        <div class="terminal-card rounded p-4 bg-[#0d1117] flex flex-col items-center justify-center">
+            <h3 class="text-muted text-xs uppercase mb-2">DONE</h3>
+            <span class="text-4xl font-mono text-success" id="stat-done">-</span>
+        </div>
+    </div>
+    <div class="terminal-card rounded overflow-hidden mb-8">
+        <div class="terminal-header"><span><i class="fas fa-chart-pie mr-2"></i>MY_PROGRESS</span></div>
+        <div class="p-4 bg-[#0d1117] h-64">
+            <canvas id="memberChart"></canvas>
+        </div>
+    </div>
+
+    {% elif user.role.value == 'manager' %}
+    <!-- MANAGER VIEW -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <!-- Throughput Chart -->
+        <!-- Team Status -->
         <div class="terminal-card rounded overflow-hidden">
-            <div class="terminal-header">
-                <span><i class="fas fa-chart-bar mr-2"></i>WEEKLY_THROUGHPUT</span>
-                <span class="text-[10px] opacity-50">./pages_count</span>
-            </div>
-            <div class="p-4 bg-[#0d1117]">
-                <div style="height: 200px;">
-                    <canvas id="pagesChart"></canvas>
-                </div>
+            <div class="terminal-header"><span><i class="fas fa-chart-doughnut mr-2"></i>TEAM_STATUS</span></div>
+            <div class="p-4 bg-[#0d1117] h-64">
+                <canvas id="teamStatusChart"></canvas>
             </div>
         </div>
-
-        <!-- Distribution Chart -->
+        <!-- Workload -->
         <div class="terminal-card rounded overflow-hidden">
-            <div class="terminal-header">
-                <span><i class="fas fa-chart-pie mr-2"></i>TYPE_DISTRIBUTION</span>
-                <span class="text-[10px] opacity-50">./categories</span>
-            </div>
-            <div class="p-4 bg-[#0d1117]">
-                <div style="height: 200px; display: flex; justify-content: center;">
-                    <canvas id="categoryChart"></canvas>
-                </div>
+            <div class="terminal-header"><span><i class="fas fa-users mr-2"></i>ACTIVE_WORKLOAD</span></div>
+            <div class="p-4 bg-[#0d1117] h-64">
+                <canvas id="workloadChart"></canvas>
             </div>
         </div>
     </div>
 
-    <!-- Recent Activity Log -->
+    {% else %}
+    <!-- ADMIN VIEW (System) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="terminal-card rounded overflow-hidden">
+            <div class="terminal-header"><span><i class="fas fa-chart-bar mr-2"></i>WEEKLY_THROUGHPUT</span></div>
+            <div class="p-4 bg-[#0d1117] h-64">
+                <canvas id="adminPageChart"></canvas>
+            </div>
+        </div>
+        <div class="terminal-card rounded overflow-hidden">
+            <div class="terminal-header"><span><i class="fas fa-chart-pie mr-2"></i>TYPE_DISTRIBUTION</span></div>
+            <div class="p-4 bg-[#0d1117] h-64">
+                <canvas id="adminCatChart"></canvas>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tactical Task List -->
     <div class="terminal-card rounded overflow-hidden">
         <div class="terminal-header">
-            <span><i class="fas fa-history mr-2"></i>RECENT_LOGS</span>
-            <span class="text-[10px] opacity-50">tail -n 5 activity.log</span>
+            <span><i class="fas fa-list-check mr-2"></i>TACTICAL_TASKS [Sorted: Priority > Time]</span>
         </div>
-        <div class="bg-[#0d1117]">
-            <ul class="divide-y divide-border">
-                {% for page in recent_pages %}
-                <li class="px-4 py-3 hover:bg-[#161b22] transition-colors group">
-                    <a href="/calendar?date={{ page.start_time.strftime('%Y-%m-%d') }}"
-                        class="flex items-center justify-between">
-                        <div class="flex items-center min-w-0">
-                            <!-- Status Icon -->
-                            <div class="mr-3">
-                                {% if page.category.value == 'incident' %}
-                                <span class="text-danger font-mono font-bold">[ERR]</span>
-                                {% elif page.category.value == 'project' %}
-                                <span class="text-success font-mono font-bold">[PRJ]</span>
-                                {% elif page.category.value == 'meeting' %}
-                                <span class="text-primary font-mono font-bold">[MTG]</span>
-                                {% else %}
-                                <span class="text-warning font-mono font-bold">[LOG]</span>
-                                {% endif %}
-                            </div>
-                            <!-- Title -->
-                            <div>
-                                <div
-                                    class="text-sm font-mono text-text truncate group-hover:text-white transition-colors">
-                                    {{ page.title }}
-                                </div>
-                                <div class="text-xs text-muted font-mono">
-                                    authored_by: {{ page.author.username }}
-                                </div>
-                            </div>
-                        </div>
+        <div class="p-0 bg-[#0d1117]">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="text-[10px] text-muted font-mono uppercase border-b border-border">
+                        <th class="px-4 py-3 font-semibold">Priority</th>
+                        <th class="px-4 py-3 font-semibold">Task</th>
+                        <th class="px-4 py-3 font-semibold">Assignee</th>
+                        <th class="px-4 py-3 font-semibold">Due</th>
+                        <th class="px-4 py-3 font-semibold">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="text-sm font-mono divide-y divide-[#21262d]">
+                    {% for pg in dashboard_tasks %}
+                    <tr class="hover:bg-[#161b22] group transition-colors">
+                        <!-- Priority Badge -->
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            {% if pg.priority.value == 'critical' %}
+                            <span
+                                class="px-2 py-0.5 rounded-full bg-[#da3633]/20 text-[#da3633] text-[10px] border border-[#da3633]/40 font-bold">CRIT</span>
+                            {% elif pg.priority.value == 'high' %}
+                            <span
+                                class="px-2 py-0.5 rounded-full bg-[#d29922]/20 text-[#d29922] text-[10px] border border-[#d29922]/40">HIGH</span>
+                            {% elif pg.priority.value == 'medium' %}
+                            <span
+                                class="px-2 py-0.5 rounded-full bg-[#58a6ff]/20 text-[#58a6ff] text-[10px] border border-[#58a6ff]/40">MED</span>
+                            {% else %}
+                            <span
+                                class="px-2 py-0.5 rounded-full bg-[#8b949e]/20 text-[#8b949e] text-[10px] border border-[#8b949e]/40">LOW</span>
+                            {% endif %}
+                        </td>
 
-                        <!-- Timestamp -->
-                        <div class="text-xs text-muted font-mono whitespace-nowrap">
-                            {{ page.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}
-                        </div>
-                    </a>
-                </li>
-                {% else %}
-                <li class="px-6 py-8 text-muted text-center font-mono text-sm">No activity logs found.</li>
-                {% endfor %}
-            </ul>
+                        <!-- Title & Category -->
+                        <td class="px-4 py-3">
+                            <div class="flex items-center">
+                                <a href="/calendar"
+                                    class="text-white hover:text-primary font-bold truncate block max-w-[200px]"
+                                    title="{{ pg.title }}">
+                                    {{ pg.title }}
+                                </a>
+                                <span class="ml-2 text-[10px] text-muted opacity-50">{{ pg.category.value }}</span>
+                            </div>
+                        </td>
+
+                        <!-- Assignee (Avatar) -->
+                        <td class="px-4 py-3">
+                            <div class="flex items-center text-xs text-muted">
+                                <div
+                                    class="w-5 h-5 rounded bg-[#30363d] flex items-center justify-center text-[10px] text-white mr-2 border border-border">
+                                    {{ pg.assignee.username[0].upper() if pg.assignee else '?' }}
+                                </div>
+                                {{ pg.assignee.username if pg.assignee else 'Unassigned' }}
+                            </div>
+                        </td>
+
+                        <!-- Due Date -->
+                        <td class="px-4 py-3 text-xs text-muted">
+                            {% if pg.end_time %}
+                            {{ pg.end_time.strftime('%b %d, %H:%M') }}
+                            {% else %}
+                            <span class="opacity-30">--</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Status Select -->
+                        <td class="px-4 py-3">
+                            <select onchange="updateTaskStatus({{ pg.id }}, this.value)"
+                                class="bg-[#21262d] border border-[#30363d] text-xs rounded px-2 py-1 text-white focus:outline-none focus:border-primary cursor-pointer hover:border-muted block w-full
+                                {% if pg.status.value == 'todo' %}text-gray-400{% elif pg.status.value == 'in_progress' %}text-blue-400 border-blue-900/30{% elif pg.status.value == 'done' %}text-green-400 border-green-900/30{% endif %}">
+                                <option value="todo" {% if pg.status.value=='todo' %}selected{% endif %}>To Do</option>
+                                <option value="in_progress" {% if pg.status.value=='in_progress' %}selected{% endif %}>
+                                    In Progress</option>
+                                <option value="done" {% if pg.status.value=='done' %}selected{% endif %}>Done</option>
+                            </select>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="px-4 py-8 text-center text-muted italic">
+                            No active tasks found independently.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
