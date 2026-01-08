@@ -66,8 +66,17 @@
             <a href="/dashboard"
                 class="group flex items-center px-4 py-1.5 hover:bg-[#21262d] transition-colors {% if request.url.path == '/dashboard' %}bg-[#21262d] text-primary border-l-2 border-primary{% else %}border-l-2 border-transparent{% endif %}">
                 <i class="fas fa-terminal w-5 text-center mr-2 opacity-70 group-hover:opacity-100"></i>
-                dashboard.sh
+                my_dashboard.sh
             </a>
+
+            <!-- Team / System Monitor (Manager + Admin) -->
+            {% if user and user.role.value in ['manager', 'admin'] %}
+            <a href="/team-dashboard"
+                class="group flex items-center px-4 py-1.5 hover:bg-[#21262d] transition-colors {% if request.url.path == '/team-dashboard' %}bg-[#21262d] text-primary border-l-2 border-primary{% else %}border-l-2 border-transparent{% endif %}">
+                <i class="fas fa-network-wired w-5 text-center mr-2 opacity-70 group-hover:opacity-100"></i>
+                {{ 'team_monitor.sh' if user.role.value == 'manager' else 'system_monitor.sh' }}
+            </a>
+            {% endif %}
             <a href="/calendar"
                 class="group flex items-center px-4 py-1.5 hover:bg-[#21262d] transition-colors {% if request.url.path == '/calendar' %}bg-[#21262d] text-primary border-l-2 border-primary{% else %}border-l-2 border-transparent{% endif %}">
                 <i class="fas fa-calendar-alt w-5 text-center mr-2 opacity-70 group-hover:opacity-100"></i>

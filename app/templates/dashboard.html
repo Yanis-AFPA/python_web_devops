@@ -10,9 +10,36 @@
             OPTIMAL</span>
     </div>
 
+    <!-- Completed Tasks (Separated Box) -->
+    {% if dashboard_done %}
+    <div class="terminal-card border-l-4 border-l-success bg-[#0d1117] p-4 mb-8 rounded">
+        <div class="flex items-center justify-between mb-3">
+            <span class="font-bold text-success"><i class="fas fa-check-double mr-2"></i>RECENTLY_COMPLETED</span>
+            <span class="text-xs text-muted font-mono">{{ dashboard_done|length }} TASKS</span>
+        </div>
+        <div class="space-y-2">
+            {% for done in dashboard_done %}
+            <div class="flex items-center justify-between p-2 rounded hover:bg-[#21262d] transition-colors group">
+                <div class="flex items-center min-w-0">
+                    <span class="w-2 h-2 rounded-full bg-success mr-3"></span>
+                    <a href="/calendar" class="text-sm font-medium text-muted group-hover:text-text truncate">{{
+                        done.title }}</a>
+                    <span
+                        class="ml-3 px-2 py-0.5 rounded bg-gray-800 text-[10px] text-gray-500 border border-gray-700">{{
+                        done.assignee.username if done.assignee else 'Unassigned' }}</span>
+                </div>
+                <div class="text-[10px] text-muted font-mono flex-shrink-0 ml-4">
+                    {{ done.updated_at.strftime('%H:%M') if done.updated_at else '' }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Tactical Task Grid -->
     <div class="terminal-header mb-4">
-        <span><i class="fas fa-th-large mr-2"></i>TACTICAL_WORKBOARD [{{ dashboard_tasks|length }} Pending]</span>
+        <span><i class="fas fa-th-large mr-2"></i>TACTICAL_WORKBOARD [{{ dashboard_tasks|length }} Active]</span>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
@@ -90,9 +117,12 @@
     </div>
 
     <!-- Metrics Grid -->
-    <!-- Role-Based Content -->
-    {% if user.role.value == 'member' %}
-    <!-- MEMBER VIEW -->
+    <!-- Metrics Grid -->
+
+    <!-- === PERSONAL DASHBOARD === -->
+    {% if dashboard_type == 'personal' %}
+    <!-- Renders for EVERYONE on /dashboard -->
+    <div class="terminal-header mb-2"><span><i class="fas fa-user-astronaut mr-2"></i>MY_PERFORMANCE</span></div>
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <!-- Left Col: Stats Stacked -->
         <div class="flex flex-col gap-4">
@@ -121,9 +151,14 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
-    {% elif user.role.value == 'manager' %}
+    <!-- === TEAM DASHBOARD === -->
+    {% if dashboard_type == 'team' %}
+
     <!-- MANAGER VIEW -->
+    {% if user.role.value == 'manager' %}
+    <div class="terminal-header mb-2"><span><i class="fas fa-users-cog mr-2"></i>TEAM_OVERVIEW</span></div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <!-- Team Status -->
         <div class="terminal-card rounded overflow-hidden">
@@ -140,9 +175,10 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
-    {% else %}
     <!-- ADMIN VIEW (System) -->
+    {% if user.role.value == 'admin' %}
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div class="terminal-card rounded overflow-hidden">
             <div class="terminal-header"><span><i class="fas fa-chart-bar mr-2"></i>WEEKLY_THROUGHPUT</span></div>
@@ -157,6 +193,8 @@
             </div>
         </div>
     </div>
+    {% endif %}
+
     {% endif %}
 </div>
 {% endblock %}

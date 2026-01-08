@@ -8,7 +8,7 @@ from app.database import get_session
 from app.auth import get_current_user, verify_password, create_access_token, get_password_hash
 from app.models import User, Page, UserRole, PageStatus, PagePriority
 from sqlmodel.ext.asyncio.session import AsyncSession
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -58,33 +58,22 @@ async def dashboard(
     query = select(Page).options(selectinload(Page.author), selectinload(Page.assignee))
     
     # 2. Role Filtering
-    if user.role == UserRole.MEMBER:
-        query = query.where(Page.assignee_id == user.id)
-    elif user.role == UserRole.MANAGER and user.team_id:
-        query = query.join(Page.assignee).where(User.team_id == user.team_id)
-    # Admin sees all (no filter)
+    # Personal Dashboard: Always show OWN tasks
+    query = query.where(Page.assignee_id == user.id)
 
-    # 3. Status Filtering (Active only for tactical view)
-    # displaying TODO and IN_PROGRESS. We might exclude DONE to keep the list clean, 
-    # or keep them if updated recently. Let's keep Active for now as per "Tactical" goal.
+    # 3. Status Filtering (Active only)
     query = query.where(Page.status.in_([PageStatus.TODO, PageStatus.IN_PROGRESS]))
 
     result = await session.exec(query)
     tasks = result.all()
 
-    # 4. Python Sorting
-    # Priority Order: Critical(0) -> High(1) -> Medium(2) -> Low(3)
+    # 4. Sorting
     priority_map = {
         PagePriority.CRITICAL: 0,
         PagePriority.HIGH: 1,
         PagePriority.MEDIUM: 2,
         PagePriority.LOW: 3
     }
-    
-    # Sort: Priority ASC, then EndTime ASC (Earliest deadline first)
-    # Handle None for end_time by using max datetime (push to bottom) or min? Usually deadlines are critical.
-    # If no deadline, maybe less urgent? Let's use max.
-    from datetime import datetime
     
     sorted_tasks = sorted(tasks, key=lambda p: (
         priority_map.get(p.priority, 4),
@@ -95,6 +84,55 @@ async def dashboard(
         "request": request,
         "user": user,
         "dashboard_tasks": sorted_tasks,
+        "dashboard_type": "personal",
+        "now": datetime.utcnow()
+    })
+
+@router.get("/team-dashboard", response_class=HTMLResponse)
+async def team_dashboard(
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    if not user:
+        return RedirectResponse("/login")
+    
+    if user.role not in [UserRole.MANAGER, UserRole.ADMIN]:
+        return RedirectResponse("/dashboard")
+
+    # Team Dashboard Tasks
+    query = select(Page).options(selectinload(Page.author), selectinload(Page.assignee))
+
+    if user.role == UserRole.MANAGER and user.team_id:
+        query = query.join(Page.assignee).where(User.team_id == user.team_id)
+    elif user.role == UserRole.ADMIN:
+        pass # All tasks for Admin
+    
+    # Separate Active vs Done
+    query_active = query.where(Page.status.in_([PageStatus.TODO, PageStatus.IN_PROGRESS]))
+    query_done = query.where(Page.status == PageStatus.DONE).order_by(desc(Page.updated_at)).limit(5) # Top 5 recent
+
+    tasks_active = (await session.exec(query_active)).all()
+    tasks_done = (await session.exec(query_done)).all()
+
+    priority_map = {
+        PagePriority.CRITICAL: 0,
+        PagePriority.HIGH: 1,
+        PagePriority.MEDIUM: 2,
+        PagePriority.LOW: 3
+    }
+    
+    sorted_active = sorted(tasks_active, key=lambda p: (
+        priority_map.get(p.priority, 4),
+        p.end_time or datetime.max
+    ))
+
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request,
+        "user": user,
+        "dashboard_tasks": sorted_active,
+        "dashboard_done": tasks_done,
+        "dashboard_type": "team",
         "now": datetime.utcnow()
     })
 

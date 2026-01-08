@@ -86,8 +86,8 @@ async function initDashboard() {
             }
         };
 
-        // --- MEMBER ---
-        if (role === 'member') {
+        // --- PERSONAL STATS (Shared: Member OR Manager) ---
+        if (role === 'member' || role === 'manager') {
             const stats = ctxData.my_stats || { todo: 0, in_progress: 0, done: 0 };
 
             // DOM Counters
@@ -114,56 +114,55 @@ async function initDashboard() {
             });
         }
 
-        // --- MANAGER ---
-        else if (role === 'manager') {
+        // --- MANAGER TEAM STATS ---
+        if (role === 'manager') {
             if (ctxData.error) {
                 console.warn("Manager has no team.");
-                return;
+            } else {
+                const teamStats = ctxData.team_stats;
+                updateOrCreate('teamStatusChart', 'bar', {
+                    labels: ['Todo', 'WIP', 'Done'],
+                    datasets: [{
+                        label: 'Tasks',
+                        data: [teamStats.todo, teamStats.in_progress, teamStats.done],
+                        backgroundColor: ['#6c757d', '#0d6efd', '#198754']
+                    }]
+                }, {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, ticks: { color: '#8b949e', font: { size: 8 } }, grid: { color: '#30363d' } },
+                        x: { ticks: { color: '#8b949e', font: { size: 8 } }, grid: { display: false } }
+                    },
+                    plugins: { legend: { display: false } }
+                });
+
+                const workload = ctxData.workload;
+                const workers = Object.keys(workload);
+                const counts = Object.values(workload);
+
+                updateOrCreate('workloadChart', 'bar', {
+                    labels: workers,
+                    datasets: [{
+                        label: 'Active',
+                        data: counts,
+                        backgroundColor: '#d29922'
+                    }]
+                }, {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: { beginAtZero: true, ticks: { color: '#8b949e', font: { size: 8 } }, grid: { color: '#30363d' } },
+                        y: { ticks: { color: '#8b949e', font: { size: 8 } }, grid: { display: false } }
+                    },
+                    plugins: { legend: { display: false } }
+                });
             }
-
-            const teamStats = ctxData.team_stats;
-            updateOrCreate('teamStatusChart', 'bar', {
-                labels: ['Todo', 'WIP', 'Done'],
-                datasets: [{
-                    label: 'Tasks',
-                    data: [teamStats.todo, teamStats.in_progress, teamStats.done],
-                    backgroundColor: ['#6c757d', '#0d6efd', '#198754']
-                }]
-            }, {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { beginAtZero: true, ticks: { color: '#8b949e', font: { size: 8 } }, grid: { color: '#30363d' } },
-                    x: { ticks: { color: '#8b949e', font: { size: 8 } }, grid: { display: false } }
-                },
-                plugins: { legend: { display: false } }
-            });
-
-            const workload = ctxData.workload;
-            const workers = Object.keys(workload);
-            const counts = Object.values(workload);
-
-            updateOrCreate('workloadChart', 'bar', {
-                labels: workers,
-                datasets: [{
-                    label: 'Active',
-                    data: counts,
-                    backgroundColor: '#d29922'
-                }]
-            }, {
-                responsive: true,
-                maintainAspectRatio: false,
-                indexAxis: 'y',
-                scales: {
-                    x: { beginAtZero: true, ticks: { color: '#8b949e', font: { size: 8 } }, grid: { color: '#30363d' } },
-                    y: { ticks: { color: '#8b949e', font: { size: 8 } }, grid: { display: false } }
-                },
-                plugins: { legend: { display: false } }
-            });
         }
 
         // --- ADMIN ---
-        else {
+        if (role === 'admin') {
             const system = ctxData.system_stats;
 
             updateOrCreate('adminPageChart', 'line', {

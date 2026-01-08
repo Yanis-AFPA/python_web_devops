@@ -197,9 +197,23 @@ async def get_metrics(
         }
 
     elif current_user.role == UserRole.MANAGER:
-        # MANAGER: Team Stats
-        # 1. Team Overview (All tasks assigned to team members + unassigned but likely in team scope? 
-        # Actually our scoped query in get_pages uses team members. Let's do that.)
+        # MANAGER: Personal Stats + Team Stats
+        
+        # 1. Personal Stats (Same as Member)
+        q_personal = select(Page.status, func.count(Page.id))\
+            .where(Page.assignee_id == current_user.id)\
+            .group_by(Page.status)
+        r_personal = await session.exec(q_personal)
+        stats_personal = {s.value: c for s, c in r_personal.all()}
+        
+        my_stats = {
+            "todo": stats_personal.get("todo", 0),
+            "in_progress": stats_personal.get("in_progress", 0),
+            "done": stats_personal.get("done", 0)
+        }
+
+        # 2. Team Stats
+        context_data = {"my_stats": my_stats}
         
         if current_user.team_id:
             sub_team = select(User.id).where(User.team_id == current_user.team_id)
@@ -211,8 +225,7 @@ async def get_metrics(
             r_status = await session.exec(q_status)
             stats_status = {s.value: c for s, c in r_status.all()}
             
-            # Workload (Active Tasks per Member)
-            # Active = Todo or In Progress
+            # Workload
             q_workload = select(User.username, func.count(Page.id))\
                 .join(Page, User.id == Page.assignee_id)\
                 .where(User.team_id == current_user.team_id)\
@@ -221,16 +234,16 @@ async def get_metrics(
             r_workload = await session.exec(q_workload)
             workload = {u: c for u, c in r_workload.all()}
             
-            response_data["context"] = {
-                "team_stats": {
-                    "todo": stats_status.get("todo", 0),
-                    "in_progress": stats_status.get("in_progress", 0),
-                    "done": stats_status.get("done", 0)
-                },
-                "workload": workload
+            context_data["team_stats"] = {
+                "todo": stats_status.get("todo", 0),
+                "in_progress": stats_status.get("in_progress", 0),
+                "done": stats_status.get("done", 0)
             }
+            context_data["workload"] = workload
         else:
-             response_data["context"] = {"error": "No Team Assigned"}
+             context_data["error"] = "No Team Assigned"
+        
+        response_data["context"] = context_data
 
     else:
         # ADMIN: System Overview (The old view)
