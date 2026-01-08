@@ -63,7 +63,7 @@ function getColorForStatus(status) {
 
 async function initDashboard() {
     try {
-        const response = await fetch('/api/metrics');
+        const response = await fetch(`/api/metrics?t=${new Date().getTime()}`);
         const data = await response.json();
         const role = data.role;
         const ctxData = data.context;

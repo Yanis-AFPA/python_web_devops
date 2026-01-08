@@ -94,7 +94,8 @@ async def dashboard(
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "user": user,
-        "dashboard_tasks": sorted_tasks  # Renamed from recent_pages
+        "dashboard_tasks": sorted_tasks,
+        "now": datetime.utcnow()
     })
 
 @router.get("/calendar", response_class=HTMLResponse)
