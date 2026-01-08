@@ -8,14 +8,6 @@ async function updateTaskStatus(pageId, newStatus) {
     // Quick and dirty status update for Dashboard
     try {
         // 1. Fetch current to get other fields (required by PUT model if not partial)
-        // Wait, our PUT requires all fields?
-        // Let's check updateEventDate logic. It sends everything.
-        // If we only send status, we might lose data if backend validation is strict on missing fields?
-        // SQLModel with default=None and update logic usually merges.
-        // But app logic in updateEventDate reconstructs the whole object.
-        // Let's rely on a backend PATCH or just fetch-modify-save pattern if strict.
-        // Given complexity, let's try a PATCH-like approach: fetching first.
-
         const getRes = await fetch(`/api/pages/${pageId}`);
         const currentData = await getRes.json();
 
@@ -37,8 +29,6 @@ async function updateTaskStatus(pageId, newStatus) {
         });
 
         if (res.ok) {
-            // Visual feedback?
-            // Maybe color change? Class manipulation is hard inline.
             // Reload dashboard metrics to reflect change
             initDashboard();
         } else {
@@ -61,6 +51,9 @@ function getColorForStatus(status) {
 
 // --- Dashboard Functions ---
 
+// Global Chart Register
+window.dashboardCharts = {};
+
 async function initDashboard() {
     try {
         const response = await fetch(`/api/metrics?t=${new Date().getTime()}`);
@@ -68,32 +61,56 @@ async function initDashboard() {
         const role = data.role;
         const ctxData = data.context;
 
+        // Helper to update or create chart
+        const updateOrCreate = (id, type, chartData, options) => {
+            const ctxEl = document.getElementById(id);
+            if (!ctxEl) return;
+
+            if (window.dashboardCharts[id]) {
+                // Update existing
+                const chart = window.dashboardCharts[id];
+                chart.data = chartData;
+                // Force no animation for instant feel
+                chart.options.animation = false;
+                chart.update('none');
+            } else {
+                // Create new
+                const ctx = ctxEl.getContext('2d');
+                // Ensure options disable animation initially too
+                options.animation = false;
+                window.dashboardCharts[id] = new Chart(ctx, {
+                    type: type,
+                    data: chartData,
+                    options: options
+                });
+            }
+        };
+
         // --- MEMBER ---
         if (role === 'member') {
             const stats = ctxData.my_stats || { todo: 0, in_progress: 0, done: 0 };
 
             // DOM Counters
-            document.getElementById('stat-todo').innerText = stats.todo;
-            document.getElementById('stat-inprogress').innerText = stats.in_progress;
-            document.getElementById('stat-done').innerText = stats.done;
+            const setSafe = (id, val) => {
+                const el = document.getElementById(id);
+                if (el) el.innerText = val;
+            };
+            setSafe('stat-todo', stats.todo);
+            setSafe('stat-inprogress', stats.in_progress);
+            setSafe('stat-done', stats.done);
 
-            // Simple Pie
-            const ctx = document.getElementById('memberChart').getContext('2d');
-            new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['To Do', 'In Progress', 'Done'],
-                    datasets: [{
-                        data: [stats.todo, stats.in_progress, stats.done],
-                        backgroundColor: ['#6c757d', '#0d6efd', '#198754'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'right', labels: { color: '#c9d1d9' } } }
-                }
+            // Member Chart
+            updateOrCreate('memberChart', 'doughnut', {
+                labels: ['To Do', 'In Progress', 'Done'],
+                datasets: [{
+                    data: [stats.todo, stats.in_progress, stats.done],
+                    backgroundColor: ['#6c757d', '#0d6efd', '#198754'],
+                    borderWidth: 0
+                }]
+            }, {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'right', labels: { color: '#c9d1d9', font: { size: 10 }, boxWidth: 10 } } }
             });
         }
 
@@ -104,56 +121,44 @@ async function initDashboard() {
                 return;
             }
 
-            // Team Status Bar/Doughnut
             const teamStats = ctxData.team_stats;
-            const ctxTeam = document.getElementById('teamStatusChart').getContext('2d');
-            new Chart(ctxTeam, {
-                type: 'bar', // or doughnut
-                data: {
-                    labels: ['To Do', 'In Progress', 'Done'],
-                    datasets: [{
-                        label: 'Tasks',
-                        data: [teamStats.todo, teamStats.in_progress, teamStats.done],
-                        backgroundColor: ['#6c757d', '#0d6efd', '#198754']
-                    }]
+            updateOrCreate('teamStatusChart', 'bar', {
+                labels: ['Todo', 'WIP', 'Done'],
+                datasets: [{
+                    label: 'Tasks',
+                    data: [teamStats.todo, teamStats.in_progress, teamStats.done],
+                    backgroundColor: ['#6c757d', '#0d6efd', '#198754']
+                }]
+            }, {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { color: '#8b949e', font: { size: 8 } }, grid: { color: '#30363d' } },
+                    x: { ticks: { color: '#8b949e', font: { size: 8 } }, grid: { display: false } }
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { beginAtZero: true, ticks: { color: '#8b949e' }, grid: { color: '#30363d' } },
-                        x: { ticks: { color: '#8b949e' }, grid: { display: false } }
-                    },
-                    plugins: { legend: { display: false } }
-                }
+                plugins: { legend: { display: false } }
             });
 
-            // Workload (Horizontal Bar)
-            const workload = ctxData.workload; // {username: count}
+            const workload = ctxData.workload;
             const workers = Object.keys(workload);
             const counts = Object.values(workload);
 
-            const ctxWork = document.getElementById('workloadChart').getContext('2d');
-            new Chart(ctxWork, {
-                type: 'bar',
+            updateOrCreate('workloadChart', 'bar', {
+                labels: workers,
+                datasets: [{
+                    label: 'Active',
+                    data: counts,
+                    backgroundColor: '#d29922'
+                }]
+            }, {
+                responsive: true,
+                maintainAspectRatio: false,
                 indexAxis: 'y',
-                data: {
-                    labels: workers,
-                    datasets: [{
-                        label: 'Active Tasks',
-                        data: counts,
-                        backgroundColor: '#d29922'
-                    }]
+                scales: {
+                    x: { beginAtZero: true, ticks: { color: '#8b949e', font: { size: 8 } }, grid: { color: '#30363d' } },
+                    y: { ticks: { color: '#8b949e', font: { size: 8 } }, grid: { display: false } }
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { beginAtZero: true, ticks: { color: '#8b949e' }, grid: { color: '#30363d' } },
-                        y: { ticks: { color: '#8b949e' }, grid: { display: false } }
-                    },
-                    plugins: { legend: { display: false } }
-                }
+                plugins: { legend: { display: false } }
             });
         }
 
@@ -161,48 +166,36 @@ async function initDashboard() {
         else {
             const system = ctxData.system_stats;
 
-            // Pages Chart
-            const ctxPage = document.getElementById('adminPageChart').getContext('2d');
-            new Chart(ctxPage, {
-                type: 'line',
-                data: {
-                    labels: ['This Week'],
-                    datasets: [{
-                        label: 'New Pages',
-                        data: [system.new_pages_week],
-                        borderColor: '#238636',
-                        backgroundColor: '#238636',
-                        tension: 0.1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { beginAtZero: true, ticks: { color: '#8b949e' }, grid: { color: '#30363d' } },
-                        x: { ticks: { color: '#8b949e' }, grid: { display: false } }
-                    }
+            updateOrCreate('adminPageChart', 'line', {
+                labels: ['This Week'],
+                datasets: [{
+                    label: 'New Pages',
+                    data: [system.new_pages_week],
+                    borderColor: '#238636',
+                    backgroundColor: '#238636',
+                    tension: 0.1
+                }]
+            }, {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { color: '#8b949e', font: { size: 8 } }, grid: { color: '#30363d' } },
+                    x: { ticks: { color: '#8b949e', font: { size: 8 } }, grid: { display: false } }
                 }
             });
 
-            // Cats
             const cats = system.categories;
-            const ctxCat = document.getElementById('adminCatChart').getContext('2d');
-            new Chart(ctxCat, {
-                type: 'doughnut',
-                data: {
-                    labels: Object.keys(cats),
-                    datasets: [{
-                        data: Object.values(cats),
-                        backgroundColor: ['#8957e5', '#d29922', '#2da44e', '#a371f7'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'right', labels: { color: '#c9d1d9' } } }
-                }
+            updateOrCreate('adminCatChart', 'doughnut', {
+                labels: Object.keys(cats),
+                datasets: [{
+                    data: Object.values(cats),
+                    backgroundColor: ['#8957e5', '#d29922', '#2da44e', '#a371f7'],
+                    borderWidth: 0
+                }]
+            }, {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'right', labels: { color: '#c9d1d9', font: { size: 10 }, boxWidth: 10 } } }
             });
         }
 
@@ -273,11 +266,6 @@ function initCalendar() {
 
         // Transform API data to matching colors of the theme
         eventDataTransform: function (eventData) {
-            let assigneeName = "Unassigned";
-            // Since we don't have user object joined in all list endpoint in standard call without depth, 
-            // we rely on assignee_id. If we want names on calendar, backend should eager load or we map from cache.
-            // For now, let's just use color codes for priority.
-
             return {
                 id: eventData.id,
                 title: eventData.title, // Add assignee prefix? e.g. "[Bob] Task"
@@ -369,10 +357,6 @@ async function updateEventDate(event) {
         priority: event.extendedProps.priority || 'medium',
         assignee_id: event.extendedProps.assignee_id
     };
-
-    // Re-format dates cause FC usage of Date objects
-    // JSON.stringify handles generic ISO, but we need to be careful if API expects specific
-    // SQLModel expects datetime, ISO is fine.
 
     try {
         const resp = await fetch(`/api/pages/${event.id}`, {
