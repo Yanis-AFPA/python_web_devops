@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlmodel import select, desc
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.database import get_session
-from app.models import StorageFile, User
+from app.models import StorageFile, User, UserRole
 from app.auth import get_current_active_user
 import shutil
 import os
@@ -71,8 +71,8 @@ async def delete_file(
     if not db_file:
         raise HTTPException(status_code=404, detail="File not found")
         
-    # Permission: Admin or Uploader
-    if current_user.role != "admin" and db_file.uploaded_by_id != current_user.id:
+    # Permission: Admin or Uploader or Manager
+    if current_user.role != UserRole.ADMIN and current_user.role != UserRole.MANAGER and db_file.uploaded_by_id != current_user.id:
          raise HTTPException(status_code=403, detail="Permission denied")
          
     # Remove from disk

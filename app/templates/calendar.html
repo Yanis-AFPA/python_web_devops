@@ -65,13 +65,22 @@
         <!-- Meta Inputs (Like Frontmatter) -->
         <div class="px-6 py-4 border-b border-border bg-[#0d1117] space-y-4">
             <div class="grid grid-cols-12 gap-4">
-                <div class="col-span-8">
+                <div class="col-span-6">
                     <label class="block text-[10px] font-mono text-muted uppercase mb-1">TITLE</label>
                     <input type="text" id="pageTitle"
                         class="w-full bg-[#161b22] border border-border text-white px-3 py-1 text-sm font-mono focus:border-primary focus:ring-0 focus:outline-none placeholder-gray-600"
                         placeholder="Task Title...">
                 </div>
-                <div class="col-span-4">
+                <div class="col-span-3">
+                    <label class="block text-[10px] font-mono text-muted uppercase mb-1">STATUS</label>
+                    <select id="pageStatus"
+                        class="w-full bg-[#161b22] border border-border text-white px-3 py-1 text-sm font-mono focus:border-primary focus:ring-0 focus:outline-none">
+                        <option value="todo">À faire</option>
+                        <option value="in_progress">En cours</option>
+                        <option value="done">Terminé</option>
+                    </select>
+                </div>
+                <div class="col-span-3">
                     <label class="block text-[10px] font-mono text-muted uppercase mb-1">PRIORITY</label>
                     <select id="pagePriority"
                         class="w-full bg-[#161b22] border border-border text-white px-3 py-1 text-sm font-mono focus:border-primary focus:ring-0 focus:outline-none">

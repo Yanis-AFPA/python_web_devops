@@ -3,6 +3,16 @@ let calendar;
 let quill;
 let currentEventId = null;
 
+// --- Helper Colors ---
+function getColorForStatus(status) {
+    switch (status) {
+        case 'todo': return '#6c757d'; // Gray
+        case 'in_progress': return '#0d6efd'; // Blue
+        case 'done': return '#198754'; // Green
+        default: return '#3788d8';
+    }
+}
+
 // --- Dashboard Functions ---
 
 async function initDashboard() {
@@ -131,8 +141,8 @@ function initCalendar() {
                     assignee_id: eventData.assignee_id,
                     priority: eventData.priority || 'medium'
                 },
-                backgroundColor: getPriorityColor(eventData.priority || 'medium'),
-                borderColor: getCategoryColor(eventData.category), // Border = Category
+                backgroundColor: getColorForStatus(eventData.status || 'todo'),
+                borderColor: getCategoryColor(eventData.category),
                 textColor: '#ffffff'
             };
         },
@@ -285,6 +295,7 @@ function openEditor(data, isExisting = false) {
         // Pivot Fields
         document.getElementById('pagePriority').value = data.extendedProps.priority || 'medium';
         document.getElementById('pageAssignee').value = data.extendedProps.assignee_id || "";
+        document.getElementById('pageStatus').value = data.extendedProps.status || 'todo';
 
         // Load content
         // IMPORTANT: data.extendedProps.content might be stale if we didn't refetch. 
@@ -293,8 +304,7 @@ function openEditor(data, isExisting = false) {
         quill.root.innerHTML = data.extendedProps.content || "";
 
         // RBAC Check for Delete button
-        const canDelete = (window.currentUserRole === 'admin') ||
-            (window.currentUserRole === 'editor' && data.extendedProps.author_id === window.currentUserId);
+        const canDelete = (window.currentUserRole === 'admin') || (window.currentUserRole === 'manager');
 
         document.getElementById('deleteBtn').style.display = canDelete ? 'inline-block' : 'none';
 
@@ -304,7 +314,9 @@ function openEditor(data, isExisting = false) {
         document.getElementById('pageTitle').value = "";
         document.getElementById('tabTitle').innerText = "untitled.md";
         document.getElementById('pagePriority').value = "medium";
+        document.getElementById('pagePriority').value = "medium";
         document.getElementById('pageAssignee').value = "";
+        document.getElementById('pageStatus').value = "todo";
         quill.root.innerHTML = "";
 
         // Temporary holding dates
@@ -313,14 +325,36 @@ function openEditor(data, isExisting = false) {
         document.getElementById('deleteBtn').style.display = 'none';
     }
 
-    // RBAC: Read-only for Viewer
-    if (window.currentUserRole === 'viewer') {
-        quill.disable();
-        document.getElementById('pageTitle').disabled = true;
-        document.getElementById('saveBtn').style.display = 'none';
+    // RBAC: Read-only logic
+    const isMember = window.currentUserRole === 'member';
+
+    if (isMember) {
+        // Members can ONLY change status (if existing task)
+        // If creating new task: they can edit everything. (Assuming they can create self-tasks)
+        // Let's refine based on user request "ne voit que leur tache mais peuvent change le status"
+
+        if (isExisting) {
+            quill.disable();
+            document.getElementById('pageTitle').disabled = true;
+            document.getElementById('pageCategory').disabled = true;
+            document.getElementById('pagePriority').disabled = true;
+            document.getElementById('pageAssignee').disabled = true;
+            // Status is ENABLED for Members
+            document.getElementById('pageStatus').disabled = false;
+        } else {
+            // Creation mode: Enable all
+            quill.enable();
+            document.getElementById('pageTitle').disabled = false;
+        }
+        document.getElementById('saveBtn').style.display = 'block';
     } else {
+        // Admin / Manager
         quill.enable();
         document.getElementById('pageTitle').disabled = false;
+        document.getElementById('pageCategory').disabled = false;
+        document.getElementById('pagePriority').disabled = false;
+        document.getElementById('pageAssignee').disabled = false;
+        document.getElementById('pageStatus').disabled = false;
         document.getElementById('saveBtn').style.display = 'block';
     }
 }
@@ -334,6 +368,7 @@ async function savePage() {
     const content = quill.root.innerHTML;
     const category = document.getElementById('pageCategory').value;
     const priority = document.getElementById('pagePriority').value;
+    const status = document.getElementById('pageStatus').value;
     const assignee_id = document.getElementById('pageAssignee').value ? parseInt(document.getElementById('pageAssignee').value) : null;
 
     if (!title) {
@@ -342,8 +377,7 @@ async function savePage() {
     }
 
     const payload = {
-        title, content, category, priority, assignee_id,
-        status: 'published'
+        title, content, category, priority, assignee_id, status
     };
 
     let method = 'POST';

@@ -9,4 +9,4 @@ class UserUpdate(SQLModel):
 class UserCreate(SQLModel):
     username: str
     password: str
-    role: UserRole = UserRole.VIEWER
+    role: UserRole = UserRole.MEMBER

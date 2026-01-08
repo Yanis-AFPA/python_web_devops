@@ -3,6 +3,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import JSONResponse
 from sqlmodel import select, col, func
+from sqlalchemy.orm import selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.database import get_session
@@ -25,14 +26,35 @@ async def get_pages(
     current_user: User = Depends(get_current_active_user)
 ):
     print(f"DEBUG: get_pages called with start={start}, end={end}, user={current_user.username}")
-    query = select(Page)
+    # Eager load relationships to prevent MissingGreenlet on Pydantic serialization
+    query = select(Page).options(selectinload(Page.author), selectinload(Page.assignee))
+    
+    # Filter by Date
     if start:
-        # DB is naive UTC, strip tzinfo if present
         start = start.replace(tzinfo=None)
         query = query.where(Page.start_time >= start)
     if end:
         end = end.replace(tzinfo=None)
         query = query.where(Page.start_time <= end)
+    
+    # --- VISIBILITY SCOPE ---
+    if current_user.role == UserRole.ADMIN:
+        pass # See all
+    elif current_user.role == UserRole.MANAGER:
+        # See own tasks + tasks assigned to team members
+        if current_user.team_id:
+            # Subquery to get user IDs in the same team
+            sub = select(User.id).where(User.team_id == current_user.team_id)
+            query = query.where(
+                (Page.assignee_id.in_(sub)) | 
+                (Page.assignee_id == None) | 
+                (Page.author_id == current_user.id)
+            )
+        else:
+            query = query.where(Page.assignee_id == current_user.id)
+    else: # MEMBER
+        # See only assigned to self
+        query = query.where(Page.assignee_id == current_user.id)
     
     result = await session.exec(query)
     return result.all()
@@ -41,8 +63,12 @@ async def get_pages(
 async def create_page(
     page_data: PageCreate,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.EDITOR]))
+    current_user: User = Depends(get_current_active_user)
 ):
+    # Member restriction: Can only assign to self
+    if current_user.role == UserRole.MEMBER and page_data.assignee_id and page_data.assignee_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Vous ne pouvez vous assigner que vos propres tâches")
+
     # Convert PageCreate to Page
     db_page = Page.from_orm(page_data)
     db_page.author_id = current_user.id
@@ -59,13 +85,24 @@ async def update_page(
     page_id: int,
     page_update: PageCreate, 
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.EDITOR]))
+    current_user: User = Depends(get_current_active_user)
 ):
     page = await session.get(Page, page_id)
     if not page:
         raise HTTPException(status_code=404, detail="Page introuvable")
     
-    # Updating fields
+    # --- PERMISSIONS ---
+    if current_user.role == UserRole.MEMBER:
+        # MEMBER: CAN ONLY CHANGE STATUS
+        # We ignore other fields or enforce it? Let's strictly just update status.
+        page.status = page_update.status
+        page.updated_at = datetime.utcnow()
+        session.add(page)
+        await session.commit()
+        await session.refresh(page)
+        return page
+
+    # MANAGER / ADMIN: Update all
     page_data = page_update.dict(exclude_unset=True)
     for key, value in page_data.items():
         setattr(page, key, value)
@@ -86,17 +123,10 @@ async def delete_page(
     page = await session.get(Page, page_id)
     if not page:
         raise HTTPException(status_code=404, detail="Page introuvable")
-
-    # DELETE permissions
-    # ADMIN: Can delete anything.
-    # EDITOR: Can delete only THEIR pages.
-    # VIEWER: Cannot delete.
     
-    if current_user.role == UserRole.VIEWER:
-        raise HTTPException(status_code=403, detail="Permission refusée")
-        
-    if current_user.role == UserRole.EDITOR and page.author_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Vous ne pouvez supprimer que vos propres pages")
+    # Only Admin or Manager (of the team) can delete?
+    if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER]:
+         raise HTTPException(status_code=403, detail="Permission refusée")
 
     await session.delete(page)
     await session.commit()
@@ -107,7 +137,7 @@ async def delete_page(
 @router.post("/upload")
 async def upload_image(
     file: UploadFile = File(...),
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.EDITOR]))
+    current_user: User = Depends(get_current_active_user)
 ):
     # Ensure directory exists
     upload_dir = "app/static/uploads"

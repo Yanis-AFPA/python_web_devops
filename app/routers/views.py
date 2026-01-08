@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Request, Form, status, Response, HTTPExc
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import select, desc
+from sqlalchemy.orm import selectinload
 
 from app.database import get_session
 from app.auth import get_current_user, verify_password, create_access_token, get_password_hash
@@ -53,7 +54,8 @@ async def dashboard(
         return RedirectResponse("/login")
         
     # Recent Pages
-    query = select(Page).order_by(desc(Page.updated_at)).limit(5)
+    # Eager load author for dashboard template
+    query = select(Page).options(selectinload(Page.author)).order_by(desc(Page.updated_at)).limit(5)
     result = await session.exec(query)
     recent_pages = result.all()
     

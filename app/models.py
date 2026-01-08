@@ -6,8 +6,8 @@ import uuid
 
 class UserRole(str, Enum):
     ADMIN = "admin"
-    EDITOR = "editor"
-    VIEWER = "viewer"
+    MANAGER = "manager"
+    MEMBER = "member"
 
 class PageCategory(str, Enum):
     MEETING = "meeting"
@@ -16,8 +16,9 @@ class PageCategory(str, Enum):
     PERSONAL = "personal"
 
 class PageStatus(str, Enum):
-    DRAFT = "draft"
-    PUBLISHED = "published"
+    TODO = "todo"
+    IN_PROGRESS = "in_progress"
+    DONE = "done"
 
 class PagePriority(str, Enum):
     LOW = "low"
@@ -25,22 +26,38 @@ class PagePriority(str, Enum):
     HIGH = "high"
     CRITICAL = "critical"
 
+class TeamBase(SQLModel):
+    name: str = Field(index=True, unique=True)
+
+class Team(TeamBase, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    members: list["User"] = Relationship(back_populates="team")
+
+class TeamRead(TeamBase):
+    id: int
+
+class TeamCreate(TeamBase):
+    pass
+
 
 
 # Models Refactor
 class UserBase(SQLModel):
     username: str = Field(index=True, unique=True)
-    role: UserRole = Field(default=UserRole.VIEWER)
+    role: UserRole = Field(default=UserRole.MEMBER)
+    team_id: Optional[int] = Field(default=None, foreign_key="team.id")
 
 class User(UserBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     password_hash: str
     
+    team: Optional[Team] = Relationship(back_populates="members")
     pages: list["Page"] = Relationship(back_populates="author", sa_relationship_kwargs={"primaryjoin": "User.id==Page.author_id"})
     assigned_pages: list["Page"] = Relationship(back_populates="assignee", sa_relationship_kwargs={"primaryjoin": "User.id==Page.assignee_id"})
 
 class UserRead(UserBase):
     id: int
+    team_id: Optional[int]
 
 class PageBase(SQLModel):
     title: str
@@ -48,7 +65,7 @@ class PageBase(SQLModel):
     start_time: datetime = Field(default_factory=datetime.utcnow)
     end_time: Optional[datetime] = None
     category: PageCategory = Field(default=PageCategory.PERSONAL)
-    status: PageStatus = Field(default=PageStatus.DRAFT)
+    status: PageStatus = Field(default=PageStatus.TODO)
     priority: PagePriority = Field(default=PagePriority.MEDIUM)
     assignee_id: Optional[int] = Field(default=None, foreign_key="user.id")
 
