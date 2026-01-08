@@ -1,0 +1,44 @@
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.python-version
+venv/
+.venv/
+env/
+dist/
+build/
+*.egg-info/
+
+# --- Environment & Sensitive Data ---
+.env
+.env.*
+! .env.example
+cookies.txt
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Testing & Code Quality ---
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# --- IDEs & OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Docker ---
+postgres_data/
+
+# --- Project Specific ---
+# Persisted Uploads (Keep the folder, ignore content)
+app/static/uploads/*
+!app/static/uploads/.keep
