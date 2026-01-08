@@ -10,74 +10,12 @@
             OPTIMAL</span>
     </div>
 
-    <!-- Metrics Grid -->
-    <!-- Role-Based Content -->
-    {% if user.role.value == 'member' %}
-    <!-- MEMBER VIEW -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div class="terminal-card rounded p-4 bg-[#0d1117] flex flex-col items-center justify-center">
-            <h3 class="text-muted text-xs uppercase mb-2">MY_TODO</h3>
-            <span class="text-4xl font-mono text-gray-400" id="stat-todo">-</span>
-        </div>
-        <div class="terminal-card rounded p-4 bg-[#0d1117] flex flex-col items-center justify-center">
-            <h3 class="text-muted text-xs uppercase mb-2">IN_PROGRESS</h3>
-            <span class="text-4xl font-mono text-primary" id="stat-inprogress">-</span>
-        </div>
-        <div class="terminal-card rounded p-4 bg-[#0d1117] flex flex-col items-center justify-center">
-            <h3 class="text-muted text-xs uppercase mb-2">DONE</h3>
-            <span class="text-4xl font-mono text-success" id="stat-done">-</span>
-        </div>
-    </div>
-    <div class="terminal-card rounded overflow-hidden mb-8">
-        <div class="terminal-header"><span><i class="fas fa-chart-pie mr-2"></i>MY_PROGRESS</span></div>
-        <div class="p-4 bg-[#0d1117] h-40">
-            <canvas id="memberChart"></canvas>
-        </div>
-    </div>
-
-    {% elif user.role.value == 'manager' %}
-    <!-- MANAGER VIEW -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <!-- Team Status -->
-        <div class="terminal-card rounded overflow-hidden">
-            <div class="terminal-header"><span><i class="fas fa-chart-doughnut mr-2"></i>TEAM_STATUS</span></div>
-            <div class="p-4 bg-[#0d1117] h-40">
-                <canvas id="teamStatusChart"></canvas>
-            </div>
-        </div>
-        <!-- Workload -->
-        <div class="terminal-card rounded overflow-hidden">
-            <div class="terminal-header"><span><i class="fas fa-users mr-2"></i>ACTIVE_WORKLOAD</span></div>
-            <div class="p-4 bg-[#0d1117] h-40">
-                <canvas id="workloadChart"></canvas>
-            </div>
-        </div>
-    </div>
-
-    {% else %}
-    <!-- ADMIN VIEW (System) -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div class="terminal-card rounded overflow-hidden">
-            <div class="terminal-header"><span><i class="fas fa-chart-bar mr-2"></i>WEEKLY_THROUGHPUT</span></div>
-            <div class="p-4 bg-[#0d1117] h-40">
-                <canvas id="adminPageChart"></canvas>
-            </div>
-        </div>
-        <div class="terminal-card rounded overflow-hidden">
-            <div class="terminal-header"><span><i class="fas fa-chart-pie mr-2"></i>TYPE_DISTRIBUTION</span></div>
-            <div class="p-4 bg-[#0d1117] h-40">
-                <canvas id="adminCatChart"></canvas>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
     <!-- Tactical Task Grid -->
     <div class="terminal-header mb-4">
         <span><i class="fas fa-th-large mr-2"></i>TACTICAL_WORKBOARD [{{ dashboard_tasks|length }} Pending]</span>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
         {% for pg in dashboard_tasks %}
         <div
             class="p-4 rounded border border-border bg-[#0d1117] flex flex-col justify-between hover:border-primary/50 transition-colors group relative">
@@ -150,6 +88,76 @@
         </div>
         {% endfor %}
     </div>
+
+    <!-- Metrics Grid -->
+    <!-- Role-Based Content -->
+    {% if user.role.value == 'member' %}
+    <!-- MEMBER VIEW -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <!-- Left Col: Stats Stacked -->
+        <div class="flex flex-col gap-4">
+            <div
+                class="terminal-card rounded p-3 bg-[#0d1117] flex items-center justify-between border-l-4 border-l-gray-500">
+                <h3 class="text-muted text-[10px] uppercase tracking-widest">MY_TODO</h3>
+                <span class="text-2xl font-mono text-gray-400" id="stat-todo">-</span>
+            </div>
+            <div
+                class="terminal-card rounded p-3 bg-[#0d1117] flex items-center justify-between border-l-4 border-l-primary">
+                <h3 class="text-muted text-[10px] uppercase tracking-widest">IN_PROGRESS</h3>
+                <span class="text-2xl font-mono text-primary" id="stat-inprogress">-</span>
+            </div>
+            <div
+                class="terminal-card rounded p-3 bg-[#0d1117] flex items-center justify-between border-l-4 border-l-success">
+                <h3 class="text-muted text-[10px] uppercase tracking-widest">DONE</h3>
+                <span class="text-2xl font-mono text-success" id="stat-done">-</span>
+            </div>
+        </div>
+
+        <!-- Right Col: Chart (Spans 2) -->
+        <div class="lg:col-span-2 terminal-card rounded overflow-hidden flex flex-col">
+            <div class="terminal-header"><span><i class="fas fa-chart-pie mr-2"></i>MY_PROGRESS</span></div>
+            <div class="p-4 bg-[#0d1117] flex-grow relative h-32 lg:h-auto">
+                <canvas id="memberChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    {% elif user.role.value == 'manager' %}
+    <!-- MANAGER VIEW -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <!-- Team Status -->
+        <div class="terminal-card rounded overflow-hidden">
+            <div class="terminal-header"><span><i class="fas fa-chart-doughnut mr-2"></i>TEAM_STATUS</span></div>
+            <div class="p-4 bg-[#0d1117] h-32">
+                <canvas id="teamStatusChart"></canvas>
+            </div>
+        </div>
+        <!-- Workload -->
+        <div class="terminal-card rounded overflow-hidden">
+            <div class="terminal-header"><span><i class="fas fa-users mr-2"></i>ACTIVE_WORKLOAD</span></div>
+            <div class="p-4 bg-[#0d1117] h-32">
+                <canvas id="workloadChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- ADMIN VIEW (System) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="terminal-card rounded overflow-hidden">
+            <div class="terminal-header"><span><i class="fas fa-chart-bar mr-2"></i>WEEKLY_THROUGHPUT</span></div>
+            <div class="p-4 bg-[#0d1117] h-32">
+                <canvas id="adminPageChart"></canvas>
+            </div>
+        </div>
+        <div class="terminal-card rounded overflow-hidden">
+            <div class="terminal-header"><span><i class="fas fa-chart-pie mr-2"></i>TYPE_DISTRIBUTION</span></div>
+            <div class="p-4 bg-[#0d1117] h-32">
+                <canvas id="adminCatChart"></canvas>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
