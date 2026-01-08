@@ -714,44 +714,7 @@ function renderFileList(files) {
     });
 }
 
-window.handleFileUpload = async function (input) {
-    if (!input.files || !input.files[0]) return;
-    if (!currentEventId) {
-        alert("Please save the task first before attaching files.");
-        input.value = '';
-        return;
-    }
 
-    const file = input.files[0];
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('page_id', currentEventId);
-
-    const statusEl = document.getElementById('uploadStatus');
-    statusEl.innerText = "Uploading...";
-
-    try {
-        const res = await fetch('/api/files', {
-            method: 'POST',
-            body: formData
-        });
-
-        if (res.ok) {
-            statusEl.innerText = "Done";
-            setTimeout(() => statusEl.innerText = "", 2000);
-            await loadFilesForPage(currentEventId);
-        } else {
-            const err = await res.json();
-            alert("Upload failed: " + err.detail);
-            statusEl.innerText = "Failed";
-        }
-    } catch (e) {
-        console.error(e);
-        alert("Upload error");
-        statusEl.innerText = "Error";
-    }
-    input.value = '';
-};
 
 window.deleteFileAttachment = async function (fileId) {
     if (!confirm("Delete this attachment?")) return;

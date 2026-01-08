@@ -94,8 +94,15 @@ async def create_page(
     
     session.add(db_page)
     await session.commit()
-    await session.refresh(db_page)
-    return db_page
+    
+    # Eager load relationships for response
+    query = select(Page).where(Page.id == db_page.id).options(
+        selectinload(Page.files).selectinload(StorageFile.uploaded_by),
+        selectinload(Page.author),
+        selectinload(Page.assignee)
+    )
+    result = await session.exec(query)
+    return result.first()
 
 @router.put("/pages/{page_id}", response_model=PageRead)
 async def update_page(
@@ -116,8 +123,15 @@ async def update_page(
         page.updated_at = datetime.utcnow()
         session.add(page)
         await session.commit()
-        await session.refresh(page)
-        return page
+        
+        # Eager load relationships for response
+        query = select(Page).where(Page.id == page.id).options(
+            selectinload(Page.files).selectinload(StorageFile.uploaded_by),
+            selectinload(Page.author),
+            selectinload(Page.assignee)
+        )
+        result = await session.exec(query)
+        return result.first()
 
     # MANAGER / ADMIN: Update all
     page_data = page_update.dict(exclude_unset=True)
@@ -128,8 +142,15 @@ async def update_page(
     
     session.add(page)
     await session.commit()
-    await session.refresh(page)
-    return page
+    
+    # Eager load relationships for response
+    query = select(Page).where(Page.id == page.id).options(
+        selectinload(Page.files).selectinload(StorageFile.uploaded_by),
+        selectinload(Page.author),
+        selectinload(Page.assignee)
+    )
+    result = await session.exec(query)
+    return result.first()
 
 @router.delete("/pages/{page_id}")
 async def delete_page(
