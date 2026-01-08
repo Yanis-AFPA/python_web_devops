@@ -315,7 +315,10 @@ function initCalendar() {
 
     // Bind UI actions
     document.getElementById('closeEditor').addEventListener('click', closeEditor);
-    document.getElementById('saveBtn').addEventListener('click', savePage);
+    document.getElementById('saveBtn').addEventListener('click', async () => {
+        const id = await savePage();
+        if (id) setTimeout(closeEditor, 500);
+    });
     document.getElementById('deleteBtn').addEventListener('click', deletePage);
 
     // Auto-update tab title
@@ -472,8 +475,12 @@ function openEditor(data, isExisting = false) {
             document.getElementById('saveBtn').style.display = 'block';
 
             // Delete button logic
+            // Delete button logic
             document.getElementById('deleteBtn').style.display = 'inline-block';
         }
+
+        // Load Attachments
+        loadFilesForPage(currentEventId);
 
     } else {
         // --- NEW EVENT ---
@@ -514,6 +521,56 @@ function closeEditor() {
     document.getElementById('editorOverlay').classList.add('translate-x-full');
 }
 
+window.handleFileUpload = async function (input) {
+    if (!input.files || !input.files[0]) return;
+
+    // Auto-save if new task
+    if (!currentEventId) {
+        if (!confirm("The task must be saved before attaching files. Save now?")) {
+            input.value = '';
+            return;
+        }
+        const savedId = await savePage();
+        if (!savedId) {
+            input.value = '';
+            return;
+        }
+        // currentEventId is updated in savePage() but let's be safe
+    }
+
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('page_id', currentEventId);
+
+    const statusEl = document.getElementById('uploadStatus');
+    statusEl.innerText = "Uploading...";
+
+    try {
+        const res = await fetch('/api/files', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (res.ok) {
+            statusEl.innerText = "Done";
+            setTimeout(() => statusEl.innerText = "", 2000);
+            await loadFilesForPage(currentEventId);
+        } else {
+            const err = await res.json();
+            alert("Upload failed: " + err.detail);
+            statusEl.innerText = "Failed";
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Upload error");
+        statusEl.innerText = "Error";
+    }
+    input.value = '';
+};
+// ... (keep deleteFileAttachment) ...
+
+// ... (in savePage) ...
 async function savePage() {
     const title = document.getElementById('pageTitle').value;
     const content = quill.root.innerHTML;
@@ -524,7 +581,7 @@ async function savePage() {
 
     if (!title) {
         alert("Title Required");
-        return;
+        return null;
     }
 
     const payload = {
@@ -540,8 +597,10 @@ async function savePage() {
 
         // Need to preserve dates if just editing content
         const eventObj = calendar.getEventById(currentEventId);
-        payload.start_time = eventObj.start;
-        payload.end_time = eventObj.end;
+        if (eventObj) {
+            payload.start_time = eventObj.start;
+            payload.end_time = eventObj.end;
+        }
     } else {
         payload.start_time = window.tempDates.start;
         payload.end_time = window.tempDates.end;
@@ -555,16 +614,36 @@ async function savePage() {
         });
 
         if (resp.ok) {
+            const savedData = await resp.json();
+
+            // Refetch to sync calendar
             calendar.refetchEvents();
             showSaveStatus();
-            setTimeout(closeEditor, 500); // Close after short delay for "Saved" check
+
+            // Update Current ID if new
+            if (!currentEventId) {
+                currentEventId = savedData.id;
+                // Update UI to show it's no longer new
+                document.getElementById('tabTitle').innerText = savedData.title + ".md";
+                document.getElementById('deleteBtn').style.display = 'inline-block';
+            }
+
+            // Don't close immediately if called from upload
+            // setTimeout(closeEditor, 500); 
+            // Better behavior: Just flash saved. Only close if explicit save button? 
+            // Actually existing behavior `saveBtn` listener calls this. 
+            // We should split "saveAndClose" vs "save".
+
+            return savedData.id;
         } else {
             const err = await resp.json();
             alert("Error: " + err.detail);
+            return null;
         }
     } catch (e) {
         console.error(e);
         alert("Erreur réseau: " + e.message);
+        return null;
     }
 }
 
@@ -584,6 +663,109 @@ async function deletePage() {
         alert("Erreur réseau: " + e.message);
     }
 }
+
+// --- Attachments Logic ---
+
+async function loadFilesForPage(pageId) {
+    const list = document.getElementById('fileList');
+    list.innerHTML = '<span class="text-xs text-muted">Loading files...</span>';
+
+    try {
+        const res = await fetch(`/api/pages/${pageId}`);
+        if (!res.ok) return;
+        const page = await res.json();
+        renderFileList(page.files || []);
+    } catch (e) {
+        console.error("Failed to load files", e);
+        list.innerHTML = '<span class="text-xs text-danger">Error loading files</span>';
+    }
+}
+
+function renderFileList(files) {
+    const list = document.getElementById('fileList');
+    list.innerHTML = '';
+
+    if (files.length === 0) {
+        list.innerHTML = '<span class="text-xs text-muted italic">No attachments yet.</span>';
+        return;
+    }
+
+    files.forEach(file => {
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between p-2 bg-[#21262d] rounded border border-border';
+
+        const isOwner = (file.uploaded_by_id === window.currentUserId) || (window.currentUserRole === 'admin') || (window.currentUserRole === 'manager');
+        const uploaderName = file.uploaded_by ? file.uploaded_by.username : "User " + file.uploaded_by_id;
+
+        row.innerHTML = `
+            <div class="flex items-center overflow-hidden">
+                <i class="fas fa-file text-muted mr-3"></i>
+                <div class="flex flex-col min-w-0">
+                    <a href="${file.url}" target="_blank" class="text-sm text-text hover:text-primary truncate font-medium">${file.filename}</a>
+                    <span class="text-[10px] text-muted">${(file.filesize / 1024).toFixed(1)} KB • ${new Date(file.uploaded_at).toLocaleDateString()} by ${uploaderName}</span>
+                </div>
+            </div>
+            <div class="flex items-center ml-2 space-x-2">
+                <a href="${file.url}" download class="text-muted hover:text-text"><i class="fas fa-download"></i></a>
+                ${isOwner ? `<button onclick="deleteFileAttachment(${file.id})" class="text-muted hover:text-danger"><i class="fas fa-trash"></i></button>` : ''}
+            </div>
+        `;
+        list.appendChild(row);
+    });
+}
+
+window.handleFileUpload = async function (input) {
+    if (!input.files || !input.files[0]) return;
+    if (!currentEventId) {
+        alert("Please save the task first before attaching files.");
+        input.value = '';
+        return;
+    }
+
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('page_id', currentEventId);
+
+    const statusEl = document.getElementById('uploadStatus');
+    statusEl.innerText = "Uploading...";
+
+    try {
+        const res = await fetch('/api/files', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (res.ok) {
+            statusEl.innerText = "Done";
+            setTimeout(() => statusEl.innerText = "", 2000);
+            await loadFilesForPage(currentEventId);
+        } else {
+            const err = await res.json();
+            alert("Upload failed: " + err.detail);
+            statusEl.innerText = "Failed";
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Upload error");
+        statusEl.innerText = "Error";
+    }
+    input.value = '';
+};
+
+window.deleteFileAttachment = async function (fileId) {
+    if (!confirm("Delete this attachment?")) return;
+    try {
+        const res = await fetch(`/api/files/${fileId}`, { method: 'DELETE' });
+        if (res.ok) {
+            await loadFilesForPage(currentEventId);
+        } else {
+            alert("Delete failed");
+        }
+    } catch (e) {
+        console.error(e);
+    }
+};
 
 function showSaveStatus() {
     const el = document.getElementById('saveStatus');

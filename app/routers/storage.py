@@ -1,9 +1,10 @@
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Form
 from sqlmodel import select, desc
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.orm import selectinload
 from app.database import get_session
-from app.models import StorageFile, User, UserRole
+from app.models import StorageFile, User, UserRole, StorageFileRead
 from app.auth import get_current_active_user
 import shutil
 import os
@@ -13,34 +14,29 @@ from datetime import datetime
 router = APIRouter()
 UPLOAD_DIR = "app/static/uploads"
 
-@router.get("/files", response_model=List[StorageFile])
+@router.get("/files", response_model=List[StorageFileRead])
 async def list_files(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_active_user)
 ):
-    query = select(StorageFile).order_by(desc(StorageFile.uploaded_at))
+    query = select(StorageFile).options(selectinload(StorageFile.uploaded_by)).order_by(desc(StorageFile.uploaded_at))
     result = await session.exec(query)
     return result.all()
 
 @router.post("/files", response_model=StorageFile)
 async def upload_file(
     file: UploadFile = File(...),
+    page_id: Optional[int] = Form(None),
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_active_user)
 ):
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     
+    # ... (Keep existing secure filename logic) ...
     # Secure filename and save
     file_ext = file.filename.split(".")[-1] if "." in file.filename else "bin"
     unique_name = f"{uuid.uuid4()}.{file_ext}"
     file_path = f"{UPLOAD_DIR}/{unique_name}"
-    
-    # Calculate size (seek to end, tell, seek to start) - UploadFile is a SpooledTemporaryFile
-    # file.file.seek(0, 2)
-    # size = file.file.tell()
-    # file.file.seek(0)
-    # Actually checking Content-Length header is safer for UploadFile wrapper or reading it.
-    # Let's just save it and check size on disk.
     
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -53,7 +49,8 @@ async def upload_file(
         filesize=size,
         url=url,
         uploaded_by_id=current_user.id,
-        uploaded_at=datetime.utcnow()
+        uploaded_at=datetime.utcnow(),
+        page_id=page_id
     )
     
     session.add(db_file)

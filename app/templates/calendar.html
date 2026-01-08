@@ -111,6 +111,24 @@
                     </select>
                 </div>
             </div>
+
+            <!-- Attachments Section -->
+            <div class="mt-4 border-t border-border pt-4">
+                <label class="block text-[10px] font-mono text-muted uppercase mb-2">ATTACHMENTS</label>
+
+                <div id="fileList" class="space-y-2 mb-3">
+                    <!-- JS Injected -->
+                </div>
+
+                <div class="flex items-center space-x-2">
+                    <label for="fileUploadInput"
+                        class="cursor-pointer bg-[#21262d] border border-border hover:bg-[#30363d] text-xs px-3 py-1 rounded flex items-center transition-colors text-white font-mono">
+                        <i class="fas fa-paperclip mr-2 text-primary"></i> Upload File
+                    </label>
+                    <input type="file" id="fileUploadInput" class="hidden" onchange="handleFileUpload(this)">
+                    <span id="uploadStatus" class="text-[10px] text-muted font-mono"></span>
+                </div>
+            </div>
         </div>
 
         <!-- Toolbar (Custom Styled) -->
@@ -149,7 +167,7 @@
     window.currentUserId = Number("{{ user.id }}");
     window.currentTeamId = Number("{{ user.team_id if user.team_id else 0 }}");
 </script>
-<script src="/static/js/app.js"></script>
+<script src="/static/js/app.js?v=3"></script>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         initCalendar();

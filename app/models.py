@@ -77,6 +77,7 @@ class Page(PageBase, table=True):
     author_id: Optional[int] = Field(default=None, foreign_key="user.id")
     author: Optional[User] = Relationship(back_populates="pages", sa_relationship_kwargs={"foreign_keys": "[Page.author_id]"})
     assignee: Optional[User] = Relationship(back_populates="assigned_pages", sa_relationship_kwargs={"foreign_keys": "[Page.assignee_id]"})
+    files: list["StorageFile"] = Relationship(back_populates="page")
 
 class PageCreate(PageBase):
     pass
@@ -94,3 +95,25 @@ class StorageFile(SQLModel, table=True):
     url: str
     uploaded_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
     uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    page_id: Optional[int] = Field(default=None, foreign_key="page.id")
+    
+    page: Optional[Page] = Relationship(back_populates="files")
+    uploaded_by: Optional["User"] = Relationship()
+
+class StorageFileRead(SQLModel):
+    id: int
+    filename: str
+    filesize: int
+    url: str
+    uploaded_at: datetime
+    uploaded_by_id: Optional[int]
+    page_id: Optional[int]
+    uploaded_by: Optional[UserRead] = None
+
+# Update PageRead to include files (Circular ref handling)
+class PageRead(PageBase):
+    id: int
+    author_id: Optional[int]
+    created_at: datetime
+    updated_at: datetime
+    files: list[StorageFileRead] = []

@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.database import get_session
-from app.models import Page, PageCategory, PageStatus, User, UserRole, PageRead, PageCreate
+from app.models import Page, PageCategory, PageStatus, User, UserRole, PageRead, PageCreate, StorageFile
 from app.auth import get_current_user, require_role, get_current_active_user
 
 import shutil
@@ -27,7 +27,7 @@ async def get_pages(
 ):
     print(f"DEBUG: get_pages called with start={start}, end={end}, user={current_user.username}")
     # Eager load relationships to prevent MissingGreenlet on Pydantic serialization
-    query = select(Page).options(selectinload(Page.author), selectinload(Page.assignee))
+    query = select(Page).options(selectinload(Page.author), selectinload(Page.assignee), selectinload(Page.files))
     
     # Filter by Date
     if start:
@@ -65,7 +65,13 @@ async def get_page(
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_active_user)
 ):
-    page = await session.get(Page, page_id)
+    # Eager load files and their uploaders
+    query = select(Page).where(Page.id == page_id).options(
+        selectinload(Page.files).selectinload(StorageFile.uploaded_by)
+    )
+    result = await session.exec(query)
+    page = result.first()
+    
     if not page:
         raise HTTPException(status_code=404, detail="Page introuvable")
     return page
